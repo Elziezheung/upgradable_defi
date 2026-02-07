@@ -140,6 +140,59 @@ class Database:
             )
         return results
 
+    def query_event_rows(
+        self,
+        contract: Optional[str],
+        event: Optional[str],
+        from_block: Optional[int],
+        to_block: Optional[int],
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        where = []
+        params: List[Any] = []
+
+        if contract:
+            where.append("contract = ?")
+            params.append(contract)
+        if event:
+            where.append("event_name = ?")
+            params.append(event)
+        if from_block is not None:
+            where.append("block_number >= ?")
+            params.append(from_block)
+        if to_block is not None:
+            where.append("block_number <= ?")
+            params.append(to_block)
+
+        sql = """
+            SELECT block_number, tx_hash, log_index, contract, event_name, args_json, timestamp
+            FROM events
+        """
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY block_number ASC, log_index ASC LIMIT ?"
+        params.append(limit)
+
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+
+        results: List[Dict[str, Any]] = []
+        for row in rows:
+            results.append(
+                {
+                    "block_number": row["block_number"],
+                    "tx_hash": row["tx_hash"],
+                    "log_index": row["log_index"],
+                    "contract": row["contract"],
+                    "event_name": row["event_name"],
+                    "args_json": row["args_json"],
+                    "timestamp": row["timestamp"],
+                }
+            )
+        return results
+
     def event_stats(
         self,
         contract: Optional[str],
