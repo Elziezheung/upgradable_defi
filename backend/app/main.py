@@ -1,17 +1,35 @@
 import asyncio
 import json
-from datetime import datetime, timedelta, timezone
+import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from web3 import Web3
+
+logger = logging.getLogger("uvicorn.error")
 
 from .chain import ChainReader
 from .config import DB_PATH, RPC_URL
 from .db import Database
 from .indexer import Indexer
 
-app = FastAPI()
+tags_metadata = [
+    {"name": "Health", "description": "Service health and chain status"},
+    {"name": "Markets", "description": "Lending market data, summaries, and time series"},
+    {"name": "Accounts", "description": "User account positions, overviews, and wallet balances"},
+    {"name": "Events", "description": "Indexed blockchain events and aggregations"},
+    {"name": "Liquidity Mining", "description": "Liquidity mining pools and user positions"},
+]
+
+app = FastAPI(
+    title="Upgradable DeFi API",
+    description="Backend API for the Upgradable DeFi lending protocol. "
+    "Provides real-time market data, account positions, indexed blockchain events, "
+    "and liquidity mining information.",
+    version="1.0.0",
+    openapi_tags=tags_metadata,
+)
 db = Database(DB_PATH)
 
 
@@ -21,6 +39,8 @@ async def startup() -> None:
     app.state.indexer = Indexer(db)
     app.state.indexer_task = asyncio.create_task(app.state.indexer.run())
     app.state.chain = ChainReader()
+    logger.info("Swagger UI available at http://127.0.0.1:8000/docs")
+    logger.info("ReDoc available at http://127.0.0.1:8000/redoc")
 
 
 @app.on_event("shutdown")
@@ -33,8 +53,9 @@ async def shutdown() -> None:
         task.cancel()
 
 
-@app.get("/health")
+@app.get("/health", tags=["Health"], summary="Check service health")
 def health():
+    """Return chain ID, latest block number, and the last block processed by the indexer."""
     w3 = Web3(Web3.HTTPProvider(RPC_URL))
     latest_block = w3.eth.block_number
     chain_id = w3.eth.chain_id
@@ -46,14 +67,15 @@ def health():
     }
 
 
-@app.get("/events")
+@app.get("/events", tags=["Events"], summary="Query indexed events")
 def get_events(
-    contract: Optional[str] = Query(None),
-    event: Optional[str] = Query(None),
-    fromBlock: Optional[int] = Query(None),
-    toBlock: Optional[int] = Query(None),
-    limit: int = Query(100, ge=1, le=1000),
+    contract: Optional[str] = Query(None, description="Filter by contract address"),
+    event: Optional[str] = Query(None, description="Filter by event name (e.g. Mint, Borrow)"),
+    fromBlock: Optional[int] = Query(None, description="Start block number"),
+    toBlock: Optional[int] = Query(None, description="End block number"),
+    limit: int = Query(100, ge=1, le=1000, description="Max results to return"),
 ):
+    """Query indexed blockchain events with optional filters for contract, event type, and block range."""
     results = db.query_events(
         contract=contract,
         event=event,
@@ -64,16 +86,18 @@ def get_events(
     return {"items": results}
 
 
-@app.get("/markets")
+@app.get("/markets", tags=["Markets"], summary="List all markets")
 def get_markets():
+    """Return detailed information for every lending market including supply/borrow rates, prices, and collateral factors."""
     chain = getattr(app.state, "chain", None)
     if not chain:
         raise HTTPException(status_code=500, detail="Chain reader not initialized")
     return {"items": chain.get_markets()}
 
 
-@app.get("/accounts/{address}")
-def get_account(address: str, market: Optional[str] = Query(None)):
+@app.get("/accounts/{address}", tags=["Accounts"], summary="Get account positions")
+def get_account(address: str, market: Optional[str] = Query(None, description="Filter by market contract address")):
+    """Return a user's positions across all markets, or a single market if specified."""
     chain = getattr(app.state, "chain", None)
     if not chain:
         raise HTTPException(status_code=500, detail="Chain reader not initialized")
@@ -84,8 +108,9 @@ def get_account(address: str, market: Optional[str] = Query(None)):
     return result
 
 
-@app.get("/account/overview")
-def get_account_overview(account: str = Query(...)):
+@app.get("/account/overview", tags=["Accounts"], summary="Get account overview")
+def get_account_overview(account: str = Query(..., description="Account address")):
+    """Return aggregated metrics for an account: net APR, borrow capacity, collateral value, and health factor."""
     chain = getattr(app.state, "chain", None)
     if not chain:
         raise HTTPException(status_code=500, detail="Chain reader not initialized")
@@ -96,8 +121,12 @@ def get_account_overview(account: str = Query(...)):
     return result
 
 
-@app.get("/account/wallet")
-def get_account_wallet(account: str = Query(...), assets: Optional[str] = Query(None)):
+@app.get("/account/wallet", tags=["Accounts"], summary="Get wallet balances")
+def get_account_wallet(
+    account: str = Query(..., description="Account address"),
+    assets: Optional[str] = Query(None, description="Comma-separated list of token symbols to filter"),
+):
+    """Return token balances for a wallet. Optionally filter by a comma-separated list of asset symbols."""
     chain = getattr(app.state, "chain", None)
     if not chain:
         raise HTTPException(status_code=500, detail="Chain reader not initialized")
@@ -109,8 +138,9 @@ def get_account_wallet(account: str = Query(...), assets: Optional[str] = Query(
     return result
 
 
-@app.get("/markets/summary")
+@app.get("/markets/summary", tags=["Markets"], summary="Get market summary")
 def get_markets_summary():
+    """Return aggregate protocol metrics: total supply, total borrow, total earning, and total collateral in USD."""
     chain = getattr(app.state, "chain", None)
     if not chain:
         raise HTTPException(status_code=500, detail="Chain reader not initialized")
@@ -119,45 +149,15 @@ def get_markets_summary():
     return summary
 
 
-@app.get("/markets/timeseries")
-def get_markets_timeseries(
-    from_ts: Optional[int] = Query(None, alias="from"),
-    to_ts: Optional[int] = Query(None, alias="to"),
-    interval: str = Query("1d"),
-):
-    chain = getattr(app.state, "chain", None)
-    if not chain:
-        raise HTTPException(status_code=500, detail="Chain reader not initialized")
-    summary = chain.get_markets_summary()
 
-    if to_ts is None:
-        to_ts = int(datetime.now(tz=timezone.utc).timestamp())
-    if from_ts is None:
-        from_ts = int((datetime.now(tz=timezone.utc) - timedelta(days=30)).timestamp())
-
-    step = 86_400 if interval == "1d" else 3_600
-    points = []
-    for ts in range(from_ts, to_ts + 1, step):
-        points.append(
-            {
-                "ts": ts,
-                "totalSupplyUsd": summary["totalSupplyUsd"],
-                "totalEarningUsd": summary["totalEarningUsd"],
-                "totalBorrowUsd": summary["totalBorrowUsd"],
-                "totalCollateralUsd": summary["totalCollateralUsd"],
-            }
-        )
-
-    return {"interval": interval, "points": points}
-
-
-@app.get("/stats")
+@app.get("/stats", tags=["Events"], summary="Get event statistics")
 def get_stats(
-    contract: Optional[str] = Query(None),
-    event: Optional[str] = Query(None),
-    fromBlock: Optional[int] = Query(None),
-    toBlock: Optional[int] = Query(None),
+    contract: Optional[str] = Query(None, description="Filter by contract address"),
+    event: Optional[str] = Query(None, description="Filter by event name"),
+    fromBlock: Optional[int] = Query(None, description="Start block number"),
+    toBlock: Optional[int] = Query(None, description="End block number"),
 ):
+    """Return event counts grouped by contract and event type."""
     results = db.event_stats(
         contract=contract,
         event=event,
@@ -167,16 +167,18 @@ def get_stats(
     return {"items": results}
 
 
-@app.get("/liquidity-mining")
+@app.get("/liquidity-mining", tags=["Liquidity Mining"], summary="List liquidity mining pools")
 def get_liquidity_mining():
+    """Return information for all liquidity mining pools including reward rates and staked totals."""
     chain = getattr(app.state, "chain", None)
     if not chain:
         raise HTTPException(status_code=500, detail="Chain reader not initialized")
     return {"items": chain.get_liquidity_mining()}
 
 
-@app.get("/liquidity-mining/{address}")
+@app.get("/liquidity-mining/{address}", tags=["Liquidity Mining"], summary="Get user liquidity mining positions")
 def get_liquidity_mining_account(address: str):
+    """Return a user's staked positions and pending rewards across all liquidity mining pools."""
     chain = getattr(app.state, "chain", None)
     if not chain:
         raise HTTPException(status_code=500, detail="Chain reader not initialized")
@@ -187,15 +189,16 @@ def get_liquidity_mining_account(address: str):
     return result
 
 
-@app.get("/events/amounts")
+@app.get("/events/amounts", tags=["Events"], summary="Get event amount aggregations")
 def get_event_amounts(
-    contract: Optional[str] = Query(None),
-    event: Optional[str] = Query(None),
-    account: Optional[str] = Query(None),
-    fromBlock: Optional[int] = Query(None),
-    toBlock: Optional[int] = Query(None),
-    limit: int = Query(5000, ge=1, le=50000),
+    contract: Optional[str] = Query(None, description="Filter by contract address"),
+    event: Optional[str] = Query(None, description="Filter by event name"),
+    account: Optional[str] = Query(None, description="Filter by account address involved in the event"),
+    fromBlock: Optional[int] = Query(None, description="Start block number"),
+    toBlock: Optional[int] = Query(None, description="End block number"),
+    limit: int = Query(5000, ge=1, le=50000, description="Max events to scan"),
 ):
+    """Aggregate event amounts (sum and count) grouped by event type, optionally filtered by account."""
     rows = db.query_event_rows(
         contract=contract,
         event=event,

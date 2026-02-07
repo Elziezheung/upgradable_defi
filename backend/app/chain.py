@@ -1,7 +1,10 @@
+import math
 from decimal import Decimal, getcontext
 from typing import Any, Dict, List, Optional
 
 from web3 import Web3
+
+SECONDS_PER_YEAR = 365 * 24 * 3600
 
 from .abi import load_abi
 from .config import RPC_URL, load_addresses
@@ -247,6 +250,7 @@ class ChainReader:
 
         supply_total = Decimal(0)
         borrow_total = Decimal(0)
+        collateral_total = Decimal(0)
         weighted_supply_rate = Decimal(0)
         weighted_borrow_rate = Decimal(0)
 
@@ -257,12 +261,14 @@ class ChainReader:
             borrow_balance = pos.get("borrowBalance")
             supply_rate = pos.get("supplyRatePerYear") or 0
             borrow_rate = pos.get("borrowRatePerYear") or 0
+            cf = pos.get("collateralFactor") or 0
 
             supply_usd = self._amount_to_usd(supply_underlying, decimals, price)
             borrow_usd = self._amount_to_usd(borrow_balance, decimals, price)
 
             if supply_usd is not None:
                 supply_total += supply_usd
+                collateral_total += supply_usd * Decimal(cf) / Decimal(10**18)
                 weighted_supply_rate += supply_usd * Decimal(supply_rate)
             if borrow_usd is not None:
                 borrow_total += borrow_usd
@@ -277,8 +283,9 @@ class ChainReader:
 
         liquidity = data.get("liquidity")
         shortfall = data.get("shortfall")
-        liquidity_dec = Decimal(liquidity) / Decimal(10**18) if liquidity is not None else None
-        shortfall_dec = Decimal(shortfall) / Decimal(10**18) if shortfall is not None else None
+        # Comptroller liquidity uses oracle price decimals (8), not WAD
+        liquidity_dec = Decimal(liquidity) / Decimal(10**8) if liquidity is not None else None
+        shortfall_dec = Decimal(shortfall) / Decimal(10**8) if shortfall is not None else None
 
         borrow_capacity = self._format_usd(liquidity_dec) if liquidity_dec is not None else None
         liquidation_point = self._format_usd(shortfall_dec) if shortfall_dec is not None else None
@@ -287,10 +294,15 @@ class ChainReader:
         if liquidity_dec is not None and borrow_total is not None:
             available_to_borrow = self._format_usd(liquidity_dec)
 
+        health_factor = None
+        if borrow_total > 0:
+            health_factor = float(collateral_total / borrow_total)
+
         return {
             "account": data.get("account"),
             "netSupplyAPR": float(net_supply_apr),
             "netBorrowAPR": float(net_borrow_apr),
+            "healthFactor": health_factor,
             "collateralValueUsd": self._format_usd(supply_total),
             "liquidationPointUsd": liquidation_point,
             "borrowCapacityUsd": borrow_capacity,
@@ -361,11 +373,29 @@ class ChainReader:
                 }
             )
 
+        total_collateral_usd = Decimal(0)
+        total_borrow_usd = Decimal(0)
+        for pos in positions:
+            decimals = pos.get("decimals")
+            price = pos.get("price")
+            cf = pos.get("collateralFactor") or 0
+            supply_usd = self._amount_to_usd(pos.get("supplyUnderlying"), decimals, price)
+            borrow_usd = self._amount_to_usd(pos.get("borrowBalance"), decimals, price)
+            if supply_usd is not None:
+                total_collateral_usd += supply_usd * Decimal(cf) / Decimal(10**18)
+            if borrow_usd is not None:
+                total_borrow_usd += borrow_usd
+
+        health_factor = None
+        if total_borrow_usd > 0:
+            health_factor = float(total_collateral_usd / total_borrow_usd)
+
         return {
             "account": checksum,
             "liquidity": liquidity,
             "shortfall": shortfall,
             "isHealthy": shortfall == 0 if shortfall is not None else None,
+            "healthFactor": health_factor,
             "positions": positions,
         }
 
@@ -469,25 +499,44 @@ class ChainReader:
             staking_erc20 = self._get_erc20(staking_token)
             rewards_erc20 = self._get_erc20(rewards_token)
 
+            staking_decimals = self._call_fn(staking_erc20, "decimals") if staking_erc20 else None
+            rewards_decimals = self._call_fn(rewards_erc20, "decimals") if rewards_erc20 else None
+            reward_rate = self._call_fn(mining, "rewardRate")
+            total_staked = self._call_fn(mining, "totalSupply")
+
+            apr = None
+            apy = None
+            if (
+                reward_rate is not None
+                and total_staked is not None
+                and total_staked > 0
+                and rewards_decimals is not None
+                and staking_decimals is not None
+            ):
+                rewards_per_year = Decimal(reward_rate) * SECONDS_PER_YEAR / Decimal(10**rewards_decimals)
+                staked_value = Decimal(total_staked) / Decimal(10**staking_decimals)
+                apr = float(rewards_per_year / staked_value)
+                apy = math.exp(apr) - 1
+
             results.append(
                 {
                     "mining": mining.address,
                     "stakingToken": staking_token,
                     "stakingSymbol": self._call_fn(staking_erc20, "symbol") if staking_erc20 else None,
-                    "stakingDecimals": self._call_fn(staking_erc20, "decimals")
-                    if staking_erc20
-                    else None,
+                    "stakingDecimals": staking_decimals,
                     "rewardsToken": rewards_token,
                     "rewardsSymbol": self._call_fn(rewards_erc20, "symbol") if rewards_erc20 else None,
-                    "rewardsDecimals": self._call_fn(rewards_erc20, "decimals")
-                    if rewards_erc20
-                    else None,
-                    "rewardRate": self._call_fn(mining, "rewardRate"),
-                    "totalStaked": self._call_fn(mining, "totalSupply"),
+                    "rewardsDecimals": rewards_decimals,
+                    "rewardRate": reward_rate,
+                    "totalStaked": total_staked,
                     "rewardPerToken": self._call_fn(mining, "rewardPerToken"),
                     "rewardsDuration": self._call_fn(mining, "rewardsDuration"),
                     "periodFinish": self._call_fn(mining, "periodFinish"),
                     "lastTimeRewardApplicable": self._call_fn(mining, "lastTimeRewardApplicable"),
+                    "stakingTokenPrice": 1.0,
+                    "rewardsTokenPrice": 1.0,
+                    "apr": apr,
+                    "apy": apy,
                 }
             )
         return results
@@ -504,22 +553,62 @@ class ChainReader:
             staking_erc20 = self._get_erc20(staking_token)
             rewards_erc20 = self._get_erc20(rewards_token)
 
+            staking_decimals = self._call_fn(staking_erc20, "decimals") if staking_erc20 else None
+            rewards_decimals = self._call_fn(rewards_erc20, "decimals") if rewards_erc20 else None
+            reward_rate = self._call_fn(mining, "rewardRate")
+            total_staked = self._call_fn(mining, "totalSupply")
+
+            apr = None
+            apy = None
+            if (
+                reward_rate is not None
+                and total_staked is not None
+                and total_staked > 0
+                and rewards_decimals is not None
+                and staking_decimals is not None
+            ):
+                rewards_per_year = Decimal(reward_rate) * SECONDS_PER_YEAR / Decimal(10**rewards_decimals)
+                staked_value = Decimal(total_staked) / Decimal(10**staking_decimals)
+                apr = float(rewards_per_year / staked_value)
+                apy = math.exp(apr) - 1
+
             results.append(
                 {
                     "mining": mining.address,
                     "stakingToken": staking_token,
                     "stakingSymbol": self._call_fn(staking_erc20, "symbol") if staking_erc20 else None,
-                    "stakingDecimals": self._call_fn(staking_erc20, "decimals")
-                    if staking_erc20
-                    else None,
+                    "stakingDecimals": staking_decimals,
                     "rewardsToken": rewards_token,
                     "rewardsSymbol": self._call_fn(rewards_erc20, "symbol") if rewards_erc20 else None,
-                    "rewardsDecimals": self._call_fn(rewards_erc20, "decimals")
-                    if rewards_erc20
-                    else None,
+                    "rewardsDecimals": rewards_decimals,
                     "stakedBalance": self._call_fn(mining, "balanceOf", checksum),
                     "earned": self._call_fn(mining, "earned", checksum),
+                    "stakingTokenPrice": 1.0,
+                    "rewardsTokenPrice": 1.0,
+                    "apr": apr,
+                    "apy": apy,
                 }
             )
 
-        return {"account": checksum, "positions": results}
+        gov_balance = None
+        gov_symbol = None
+        gov_decimals = None
+        gov_token = None
+        if results:
+            gov_token = results[0].get("rewardsToken")
+            gov_symbol = results[0].get("rewardsSymbol")
+            gov_decimals = results[0].get("rewardsDecimals")
+        if gov_token:
+            gov_erc20 = self._get_erc20(gov_token)
+            raw_balance = self._call_fn(gov_erc20, "balanceOf", checksum) if gov_erc20 else None
+            if raw_balance is not None and gov_decimals is not None:
+                gov_balance = float(Decimal(raw_balance) / Decimal(10**gov_decimals))
+
+        return {
+            "account": checksum,
+            "govToken": gov_token,
+            "govSymbol": gov_symbol,
+            "govDecimals": gov_decimals,
+            "govBalance": gov_balance,
+            "positions": results,
+        }
