@@ -250,6 +250,7 @@ class ChainReader:
 
         supply_total = Decimal(0)
         borrow_total = Decimal(0)
+        collateral_total = Decimal(0)
         weighted_supply_rate = Decimal(0)
         weighted_borrow_rate = Decimal(0)
 
@@ -260,12 +261,14 @@ class ChainReader:
             borrow_balance = pos.get("borrowBalance")
             supply_rate = pos.get("supplyRatePerYear") or 0
             borrow_rate = pos.get("borrowRatePerYear") or 0
+            cf = pos.get("collateralFactor") or 0
 
             supply_usd = self._amount_to_usd(supply_underlying, decimals, price)
             borrow_usd = self._amount_to_usd(borrow_balance, decimals, price)
 
             if supply_usd is not None:
                 supply_total += supply_usd
+                collateral_total += supply_usd * Decimal(cf) / Decimal(10**18)
                 weighted_supply_rate += supply_usd * Decimal(supply_rate)
             if borrow_usd is not None:
                 borrow_total += borrow_usd
@@ -280,8 +283,9 @@ class ChainReader:
 
         liquidity = data.get("liquidity")
         shortfall = data.get("shortfall")
-        liquidity_dec = Decimal(liquidity) / Decimal(10**18) if liquidity is not None else None
-        shortfall_dec = Decimal(shortfall) / Decimal(10**18) if shortfall is not None else None
+        # Comptroller liquidity uses oracle price decimals (8), not WAD
+        liquidity_dec = Decimal(liquidity) / Decimal(10**8) if liquidity is not None else None
+        shortfall_dec = Decimal(shortfall) / Decimal(10**8) if shortfall is not None else None
 
         borrow_capacity = self._format_usd(liquidity_dec) if liquidity_dec is not None else None
         liquidation_point = self._format_usd(shortfall_dec) if shortfall_dec is not None else None
@@ -290,10 +294,15 @@ class ChainReader:
         if liquidity_dec is not None and borrow_total is not None:
             available_to_borrow = self._format_usd(liquidity_dec)
 
+        health_factor = None
+        if borrow_total > 0:
+            health_factor = float(collateral_total / borrow_total)
+
         return {
             "account": data.get("account"),
             "netSupplyAPR": float(net_supply_apr),
             "netBorrowAPR": float(net_borrow_apr),
+            "healthFactor": health_factor,
             "collateralValueUsd": self._format_usd(supply_total),
             "liquidationPointUsd": liquidation_point,
             "borrowCapacityUsd": borrow_capacity,
@@ -364,11 +373,29 @@ class ChainReader:
                 }
             )
 
+        total_collateral_usd = Decimal(0)
+        total_borrow_usd = Decimal(0)
+        for pos in positions:
+            decimals = pos.get("decimals")
+            price = pos.get("price")
+            cf = pos.get("collateralFactor") or 0
+            supply_usd = self._amount_to_usd(pos.get("supplyUnderlying"), decimals, price)
+            borrow_usd = self._amount_to_usd(pos.get("borrowBalance"), decimals, price)
+            if supply_usd is not None:
+                total_collateral_usd += supply_usd * Decimal(cf) / Decimal(10**18)
+            if borrow_usd is not None:
+                total_borrow_usd += borrow_usd
+
+        health_factor = None
+        if total_borrow_usd > 0:
+            health_factor = float(total_collateral_usd / total_borrow_usd)
+
         return {
             "account": checksum,
             "liquidity": liquidity,
             "shortfall": shortfall,
             "isHealthy": shortfall == 0 if shortfall is not None else None,
+            "healthFactor": health_factor,
             "positions": positions,
         }
 
