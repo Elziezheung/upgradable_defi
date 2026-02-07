@@ -506,6 +506,8 @@ class ChainReader:
                     "rewardsDuration": self._call_fn(mining, "rewardsDuration"),
                     "periodFinish": self._call_fn(mining, "periodFinish"),
                     "lastTimeRewardApplicable": self._call_fn(mining, "lastTimeRewardApplicable"),
+                    "stakingTokenPrice": 1.0,
+                    "rewardsTokenPrice": 1.0,
                     "apr": apr,
                     "apy": apy,
                 }
@@ -554,6 +556,8 @@ class ChainReader:
                     "rewardsDecimals": rewards_decimals,
                     "stakedBalance": self._call_fn(mining, "balanceOf", checksum),
                     "earned": self._call_fn(mining, "earned", checksum),
+                    "stakingTokenPrice": 1.0,
+                    "rewardsTokenPrice": 1.0,
                     "apr": apr,
                     "apy": apy,
                 }
