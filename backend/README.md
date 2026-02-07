@@ -12,6 +12,7 @@ cd /Users/liuruyan/Desktop/course/6107/upgradable_defi/backend
 python3.9 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+export ABI_ROOT=/Users/liuruyan/Desktop/course/6107/upgradable_defi/contracts/out
 uvicorn app.main:app --reload
 ```
 
@@ -27,6 +28,17 @@ uvicorn app.main:app --reload
 ```
 
 ABI 自动从 `../contracts/out/` 查找并读取（`abi` 字段）。
+
+## 测试与验证
+运行 API 测试脚本（默认使用 anvil 账号 0 地址）：
+```bash
+python test_api.py
+```
+
+看到如下结果说明合约数据已读到：
+- `/markets` 中包含 `symbol`、`price` 等字段且非空
+- `/markets/summary` 返回 4 个 USD 聚合字段
+- `/liquidity-mining` 返回两条挖矿池记录
 
 ## API
 - `GET /health`
@@ -57,6 +69,12 @@ ABI 自动从 `../contracts/out/` 查找并读取（`abi` 字段）。
 - `GET /liquidity-mining/{address}`：用户在各挖矿池的质押与收益。
 
 ## 备注
+- 运行流程（联调时链要保持开启）：
+  1. 启动本地链：`anvil`
+  2. 部署合约：`upgradable_defi/contracts/script/deploy_local.sh`
+  3. 写入地址配置：运行 `quick_extract_local.sh` 并写入 `backend/config/addresses.local.json`
+  4. 启动后端：`uvicorn app.main:app --reload`
+- 如果关闭 anvil，链上读数会失败或变为 `null/0`。
 - 默认从 `latest-2000` 开始索引（如无 `state.lastProcessedBlock`）。
 - 可通过环境变量修改：
   - `RPC_URL`（默认 `http://127.0.0.1:8545`）
