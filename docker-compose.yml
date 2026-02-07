@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # Ethereum JSON-RPC Server (e.g., Ganache or Hardhat)
+  # Uncomment and configure if needed
+  # ethereum:
+  #   image: trufflesuite/ganache-cli
+  #   ports:
+  #     - "8545:8545"
+  #   command: ganache-cli -h 0.0.0.0 --determine-block-number
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: defi-backend
+    ports:
+      - "8000:8000"
+    environment:
+      RPC_URL: ${RPC_URL:-http://127.0.0.1:8545}
+      DB_PATH: /app/data/indexer.db
+      POLL_INTERVAL: ${POLL_INTERVAL:-5}
+      BATCH_SIZE: ${BATCH_SIZE:-1000}
+    volumes:
+      - ./backend:/app
+      - defi_data:/app/data
+    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - ethereum
+
+  # Frontend (optional - can be run separately)
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: defi-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    depends_on:
+      - backend
+
+volumes:
+  defi_data:
+    driver: local

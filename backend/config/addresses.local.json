@@ -1,12 +1,12 @@
 {
-  "comptroller": "0x610178da211fef7d417bc0e6fed39f05609ad788",
+  "comptroller": "0x5f3f1dbd7b74c6b46e8c44f98792a1daf8d69154",
   "markets": [
-    "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
-    "0x9A676e781A523b5d0C0e43731313A708CB607508"
+    "0xCD8a1C3ba11CF5ECfa6267617243239504a98d90",
+    "0x2bdCC0de6bE1f7D2ee689a0342D76F52E8EFABa3"
   ],
   "liquidityMining": [
-    "0x7a2088a1bfc9d81c55368ae168c2c02570cb814f",
-    "0xc5a5c42992decbae36851359345fe25997f5c42d"
+    "0xdbc43ba45381e02825b14322cddd15ec4b3164e6",
+    "0x4c4a2f8c81640e47606d3fd77b353e87ba015584"
   ],
-  "priceOracle": "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707"
+  "priceOracle": "0x5eb3bc0a489c5a2888765d2336659ebca68fcd00"
 }
