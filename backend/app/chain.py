@@ -1,7 +1,10 @@
+import math
 from decimal import Decimal, getcontext
 from typing import Any, Dict, List, Optional
 
 from web3 import Web3
+
+SECONDS_PER_YEAR = 365 * 24 * 3600
 
 from .abi import load_abi
 from .config import RPC_URL, load_addresses
@@ -469,25 +472,42 @@ class ChainReader:
             staking_erc20 = self._get_erc20(staking_token)
             rewards_erc20 = self._get_erc20(rewards_token)
 
+            staking_decimals = self._call_fn(staking_erc20, "decimals") if staking_erc20 else None
+            rewards_decimals = self._call_fn(rewards_erc20, "decimals") if rewards_erc20 else None
+            reward_rate = self._call_fn(mining, "rewardRate")
+            total_staked = self._call_fn(mining, "totalSupply")
+
+            apr = None
+            apy = None
+            if (
+                reward_rate is not None
+                and total_staked is not None
+                and total_staked > 0
+                and rewards_decimals is not None
+                and staking_decimals is not None
+            ):
+                rewards_per_year = Decimal(reward_rate) * SECONDS_PER_YEAR / Decimal(10**rewards_decimals)
+                staked_value = Decimal(total_staked) / Decimal(10**staking_decimals)
+                apr = float(rewards_per_year / staked_value)
+                apy = math.exp(apr) - 1
+
             results.append(
                 {
                     "mining": mining.address,
                     "stakingToken": staking_token,
                     "stakingSymbol": self._call_fn(staking_erc20, "symbol") if staking_erc20 else None,
-                    "stakingDecimals": self._call_fn(staking_erc20, "decimals")
-                    if staking_erc20
-                    else None,
+                    "stakingDecimals": staking_decimals,
                     "rewardsToken": rewards_token,
                     "rewardsSymbol": self._call_fn(rewards_erc20, "symbol") if rewards_erc20 else None,
-                    "rewardsDecimals": self._call_fn(rewards_erc20, "decimals")
-                    if rewards_erc20
-                    else None,
-                    "rewardRate": self._call_fn(mining, "rewardRate"),
-                    "totalStaked": self._call_fn(mining, "totalSupply"),
+                    "rewardsDecimals": rewards_decimals,
+                    "rewardRate": reward_rate,
+                    "totalStaked": total_staked,
                     "rewardPerToken": self._call_fn(mining, "rewardPerToken"),
                     "rewardsDuration": self._call_fn(mining, "rewardsDuration"),
                     "periodFinish": self._call_fn(mining, "periodFinish"),
                     "lastTimeRewardApplicable": self._call_fn(mining, "lastTimeRewardApplicable"),
+                    "apr": apr,
+                    "apy": apy,
                 }
             )
         return results
@@ -504,21 +524,38 @@ class ChainReader:
             staking_erc20 = self._get_erc20(staking_token)
             rewards_erc20 = self._get_erc20(rewards_token)
 
+            staking_decimals = self._call_fn(staking_erc20, "decimals") if staking_erc20 else None
+            rewards_decimals = self._call_fn(rewards_erc20, "decimals") if rewards_erc20 else None
+            reward_rate = self._call_fn(mining, "rewardRate")
+            total_staked = self._call_fn(mining, "totalSupply")
+
+            apr = None
+            apy = None
+            if (
+                reward_rate is not None
+                and total_staked is not None
+                and total_staked > 0
+                and rewards_decimals is not None
+                and staking_decimals is not None
+            ):
+                rewards_per_year = Decimal(reward_rate) * SECONDS_PER_YEAR / Decimal(10**rewards_decimals)
+                staked_value = Decimal(total_staked) / Decimal(10**staking_decimals)
+                apr = float(rewards_per_year / staked_value)
+                apy = math.exp(apr) - 1
+
             results.append(
                 {
                     "mining": mining.address,
                     "stakingToken": staking_token,
                     "stakingSymbol": self._call_fn(staking_erc20, "symbol") if staking_erc20 else None,
-                    "stakingDecimals": self._call_fn(staking_erc20, "decimals")
-                    if staking_erc20
-                    else None,
+                    "stakingDecimals": staking_decimals,
                     "rewardsToken": rewards_token,
                     "rewardsSymbol": self._call_fn(rewards_erc20, "symbol") if rewards_erc20 else None,
-                    "rewardsDecimals": self._call_fn(rewards_erc20, "decimals")
-                    if rewards_erc20
-                    else None,
+                    "rewardsDecimals": rewards_decimals,
                     "stakedBalance": self._call_fn(mining, "balanceOf", checksum),
                     "earned": self._call_fn(mining, "earned", checksum),
+                    "apr": apr,
+                    "apy": apy,
                 }
             )
 

@@ -39,6 +39,9 @@ def main():
     print("\nGET /liquidity-mining")
     print(json.dumps(get("/liquidity-mining"), indent=2))
 
+    print(f"\nGET /liquidity-mining/{account}")
+    print(json.dumps(get(f"/liquidity-mining/{account}"), indent=2))
+
 
 if __name__ == "__main__":
     main()
