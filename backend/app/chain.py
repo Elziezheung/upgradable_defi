@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 from web3 import Web3
 
 SECONDS_PER_YEAR = 365 * 24 * 3600
+PRICE_DECIMALS = Decimal(10**8)
+WAD = Decimal(10**18)
 
 from .abi import load_abi
 from .config import RPC_URL, load_addresses
@@ -99,6 +101,11 @@ class ChainReader:
             return None
         return Decimal(value)
 
+    def _to_decimal_from_float(self, value: Optional[float]) -> Optional[Decimal]:
+        if value is None:
+            return None
+        return Decimal(str(value))
+
     def _format_usd(self, value: Optional[Decimal]) -> Optional[str]:
         if value is None:
             return None
@@ -108,8 +115,39 @@ class ChainReader:
         if amount is None or decimals is None or price is None:
             return None
         amount_dec = Decimal(amount) / (Decimal(10) ** decimals)
-        price_dec = Decimal(price) / Decimal(10**8)
+        price_dec = Decimal(price) / PRICE_DECIMALS
         return amount_dec * price_dec
+
+    def _amount_to_usd_from_price_usd(
+        self, amount: Optional[int], decimals: Optional[int], price_usd: Optional[float]
+    ) -> Optional[Decimal]:
+        if amount is None or decimals is None or price_usd is None:
+            return None
+        amount_dec = Decimal(amount) / (Decimal(10) ** decimals)
+        price_dec = Decimal(str(price_usd))
+        return amount_dec * price_dec
+
+    def _price_to_usd(self, price: Optional[int]) -> Optional[Decimal]:
+        if price is None:
+            return None
+        return Decimal(price) / PRICE_DECIMALS
+
+    def _rate_to_decimal(self, rate: Optional[int]) -> Optional[Decimal]:
+        if rate is None:
+            return None
+        return Decimal(rate) / WAD
+
+    def _decimal_to_pct(self, value: Optional[Decimal]) -> Optional[Decimal]:
+        if value is None:
+            return None
+        return value * Decimal(100)
+
+    def _to_float(self, value: Optional[Decimal], quantize: Optional[str] = None) -> Optional[float]:
+        if value is None:
+            return None
+        if quantize:
+            value = value.quantize(Decimal(quantize))
+        return float(value)
 
     def get_markets(self) -> List[Dict[str, Any]]:
         results = []
@@ -180,21 +218,53 @@ class ChainReader:
                 if cfg:
                     collateral_factor, is_listed = cfg
 
+            price_raw = self._get_price(underlying)
+            price_usd = self._price_to_usd(price_raw)
+
+            supply_underlying_raw = None
+            supply_underlying = None
+            supply_usd = None
+            if total_supply is not None and exchange_rate is not None:
+                supply_underlying_dec = (Decimal(total_supply) * Decimal(exchange_rate)) / WAD
+                supply_underlying_raw = int(supply_underlying_dec)
+                if decimals is not None:
+                    supply_underlying = self._to_float(
+                        supply_underlying_dec / (Decimal(10) ** decimals)
+                    )
+                supply_usd = self._amount_to_usd(supply_underlying_raw, decimals, price_raw)
+
+            borrow_underlying = None
+            borrow_usd = self._amount_to_usd(total_borrows, decimals, price_raw)
+            if total_borrows is not None and decimals is not None:
+                borrow_underlying = self._to_float(
+                    Decimal(total_borrows) / (Decimal(10) ** decimals)
+                )
+
+            supply_rate_dec = self._rate_to_decimal(supply_rate_year)
+            borrow_rate_dec = self._rate_to_decimal(borrow_rate_year)
+
             results.append(
                 {
                     "market": market.address,
                     "underlying": underlying,
                     "symbol": symbol,
                     "decimals": decimals,
-                    "totalSupply": total_supply,
-                    "totalBorrows": total_borrows,
+                    "totalSupply": self._to_float(supply_usd, "0.000001"),
+                    "totalSupplyUnderlying": supply_underlying,
+                    "totalSupplyUsd": self._to_float(supply_usd, "0.000001"),
+                    "totalBorrows": self._to_float(borrow_usd, "0.000001"),
+                    "totalBorrowsUnderlying": borrow_underlying,
+                    "totalBorrowsUsd": self._to_float(borrow_usd, "0.000001"),
                     "totalReserves": total_reserves,
                     "cash": cash,
                     "exchangeRate": exchange_rate,
                     "utilization": utilization,
-                    "borrowRatePerYear": borrow_rate_year,
-                    "supplyRatePerYear": supply_rate_year,
-                    "price": self._get_price(underlying),
+                    "borrowRatePerYear": self._to_float(borrow_rate_dec, "0.0000000000000001"),
+                    "borrowAprPct": self._to_float(self._decimal_to_pct(borrow_rate_dec), "0.0001"),
+                    "supplyRatePerYear": self._to_float(supply_rate_dec, "0.0000000000000001"),
+                    "supplyAprPct": self._to_float(self._decimal_to_pct(supply_rate_dec), "0.0001"),
+                    "price": self._to_float(price_usd, "0.000001"),
+                    "priceUsd": self._to_float(price_usd, "0.000001"),
                     "collateralFactor": collateral_factor,
                     "isListed": is_listed,
                 }
@@ -209,31 +279,20 @@ class ChainReader:
         total_earning = Decimal(0)
 
         for market in markets:
-            decimals = market.get("decimals")
-            price = market.get("price")
-            exchange_rate = market.get("exchangeRate")
-            supply_dtoken = market.get("totalSupply")
-            borrow = market.get("totalBorrows")
             collateral_factor = market.get("collateralFactor") or 0
             supply_rate = market.get("supplyRatePerYear") or 0
 
-            supply_underlying = None
-            if supply_dtoken is not None and exchange_rate is not None:
-                supply_underlying = (Decimal(supply_dtoken) * Decimal(exchange_rate)) / Decimal(
-                    10**18
-                )
-
-            supply_usd = (
-                self._amount_to_usd(int(supply_underlying), decimals, price)
-                if supply_underlying is not None
-                else None
+            supply_usd = self._to_decimal_from_float(
+                market.get("totalSupplyUsd", market.get("totalSupply"))
             )
-            borrow_usd = self._amount_to_usd(borrow, decimals, price)
+            borrow_usd = self._to_decimal_from_float(
+                market.get("totalBorrowsUsd", market.get("totalBorrows"))
+            )
 
             if supply_usd is not None:
                 total_supply += supply_usd
                 total_collateral += supply_usd * Decimal(collateral_factor) / Decimal(10**18)
-                total_earning += supply_usd * Decimal(supply_rate) / Decimal(10**18)
+                total_earning += supply_usd * Decimal(str(supply_rate))
             if borrow_usd is not None:
                 total_borrow += borrow_usd
 
@@ -256,36 +315,35 @@ class ChainReader:
 
         for pos in positions:
             decimals = pos.get("decimals")
-            price = pos.get("price")
+            price_usd = pos.get("priceUsd", pos.get("price"))
             supply_underlying = pos.get("supplyUnderlying")
             borrow_balance = pos.get("borrowBalance")
             supply_rate = pos.get("supplyRatePerYear") or 0
             borrow_rate = pos.get("borrowRatePerYear") or 0
             cf = pos.get("collateralFactor") or 0
 
-            supply_usd = self._amount_to_usd(supply_underlying, decimals, price)
-            borrow_usd = self._amount_to_usd(borrow_balance, decimals, price)
+            supply_usd = self._amount_to_usd_from_price_usd(supply_underlying, decimals, price_usd)
+            borrow_usd = self._amount_to_usd_from_price_usd(borrow_balance, decimals, price_usd)
 
             if supply_usd is not None:
                 supply_total += supply_usd
                 collateral_total += supply_usd * Decimal(cf) / Decimal(10**18)
-                weighted_supply_rate += supply_usd * Decimal(supply_rate)
+                weighted_supply_rate += supply_usd * Decimal(str(supply_rate))
             if borrow_usd is not None:
                 borrow_total += borrow_usd
-                weighted_borrow_rate += borrow_usd * Decimal(borrow_rate)
+                weighted_borrow_rate += borrow_usd * Decimal(str(borrow_rate))
 
         net_supply_apr = (
-            weighted_supply_rate / supply_total / Decimal(10**18) if supply_total > 0 else Decimal(0)
+            weighted_supply_rate / supply_total if supply_total > 0 else Decimal(0)
         )
         net_borrow_apr = (
-            weighted_borrow_rate / borrow_total / Decimal(10**18) if borrow_total > 0 else Decimal(0)
+            weighted_borrow_rate / borrow_total if borrow_total > 0 else Decimal(0)
         )
 
-        liquidity = data.get("liquidity")
-        shortfall = data.get("shortfall")
-        # Comptroller liquidity uses oracle price decimals (8), not WAD
-        liquidity_dec = Decimal(liquidity) / Decimal(10**8) if liquidity is not None else None
-        shortfall_dec = Decimal(shortfall) / Decimal(10**8) if shortfall is not None else None
+        liquidity_usd = data.get("liquidityUsd", data.get("liquidity"))
+        shortfall_usd = data.get("shortfallUsd", data.get("shortfall"))
+        liquidity_dec = self._to_decimal_from_float(liquidity_usd)
+        shortfall_dec = self._to_decimal_from_float(shortfall_usd)
 
         borrow_capacity = self._format_usd(liquidity_dec) if liquidity_dec is not None else None
         liquidation_point = self._format_usd(shortfall_dec) if shortfall_dec is not None else None
@@ -342,6 +400,23 @@ class ChainReader:
                 if cfg:
                     collateral_factor, is_listed = cfg
 
+            price_raw = self._get_price(underlying)
+            price_usd = self._price_to_usd(price_raw)
+            supply_rate_raw = self._call_fn(
+                self._get_rate_model(self._call_fn(market, "interestRateModel")),
+                "getSupplyRatePerYear",
+                self._call_fn(market, "getCash"),
+                self._call_fn(market, "totalBorrows"),
+                self._call_fn(market, "totalReserves", default=0),
+                self._call_fn(market, "reserveFactorMantissa", default=0),
+            )
+            borrow_rate_raw = self._call_fn(
+                self._get_rate_model(self._call_fn(market, "interestRateModel")),
+                "getBorrowRatePerYear",
+                self._call_fn(market, "getCash"),
+                self._call_fn(market, "totalBorrows"),
+                self._call_fn(market, "totalReserves", default=0),
+            )
             positions.append(
                 {
                     "market": market.address,
@@ -352,21 +427,13 @@ class ChainReader:
                     "supplyUnderlying": underlying_supply,
                     "borrowBalance": borrow_balance,
                     "exchangeRate": exchange_rate,
-                    "price": self._get_price(underlying),
-                    "supplyRatePerYear": self._call_fn(
-                        self._get_rate_model(self._call_fn(market, "interestRateModel")),
-                        "getSupplyRatePerYear",
-                        self._call_fn(market, "getCash"),
-                        self._call_fn(market, "totalBorrows"),
-                        self._call_fn(market, "totalReserves", default=0),
-                        self._call_fn(market, "reserveFactorMantissa", default=0),
+                    "price": self._to_float(price_usd, "0.000001"),
+                    "priceUsd": self._to_float(price_usd, "0.000001"),
+                    "supplyRatePerYear": self._to_float(
+                        self._rate_to_decimal(supply_rate_raw), "0.0000000000000001"
                     ),
-                    "borrowRatePerYear": self._call_fn(
-                        self._get_rate_model(self._call_fn(market, "interestRateModel")),
-                        "getBorrowRatePerYear",
-                        self._call_fn(market, "getCash"),
-                        self._call_fn(market, "totalBorrows"),
-                        self._call_fn(market, "totalReserves", default=0),
+                    "borrowRatePerYear": self._to_float(
+                        self._rate_to_decimal(borrow_rate_raw), "0.0000000000000001"
                     ),
                     "collateralFactor": collateral_factor,
                     "isListed": is_listed,
@@ -377,10 +444,14 @@ class ChainReader:
         total_borrow_usd = Decimal(0)
         for pos in positions:
             decimals = pos.get("decimals")
-            price = pos.get("price")
+            price_usd = pos.get("priceUsd", pos.get("price"))
             cf = pos.get("collateralFactor") or 0
-            supply_usd = self._amount_to_usd(pos.get("supplyUnderlying"), decimals, price)
-            borrow_usd = self._amount_to_usd(pos.get("borrowBalance"), decimals, price)
+            supply_usd = self._amount_to_usd_from_price_usd(
+                pos.get("supplyUnderlying"), decimals, price_usd
+            )
+            borrow_usd = self._amount_to_usd_from_price_usd(
+                pos.get("borrowBalance"), decimals, price_usd
+            )
             if supply_usd is not None:
                 total_collateral_usd += supply_usd * Decimal(cf) / Decimal(10**18)
             if borrow_usd is not None:
@@ -390,10 +461,23 @@ class ChainReader:
         if total_borrow_usd > 0:
             health_factor = float(total_collateral_usd / total_borrow_usd)
 
+        liquidity_usd = (
+            self._to_float(Decimal(liquidity) / PRICE_DECIMALS, "0.000001")
+            if liquidity is not None
+            else None
+        )
+        shortfall_usd = (
+            self._to_float(Decimal(shortfall) / PRICE_DECIMALS, "0.000001")
+            if shortfall is not None
+            else None
+        )
+
         return {
             "account": checksum,
-            "liquidity": liquidity,
-            "shortfall": shortfall,
+            "liquidity": liquidity_usd,
+            "liquidityUsd": liquidity_usd,
+            "shortfall": shortfall_usd,
+            "shortfallUsd": shortfall_usd,
             "isHealthy": shortfall == 0 if shortfall is not None else None,
             "healthFactor": health_factor,
             "positions": positions,
@@ -433,6 +517,9 @@ class ChainReader:
             if cfg:
                 collateral_factor, is_listed = cfg
 
+        price_raw = self._get_price(underlying)
+        price_usd = self._price_to_usd(price_raw)
+
         return {
             "account": checksum,
             "market": market.address,
@@ -443,7 +530,8 @@ class ChainReader:
             "supplyUnderlying": underlying_supply,
             "borrowBalance": borrow_balance,
             "exchangeRate": exchange_rate,
-            "price": self._get_price(underlying),
+            "price": self._to_float(price_usd, "0.000001"),
+            "priceUsd": self._to_float(price_usd, "0.000001"),
             "collateralFactor": collateral_factor,
             "isListed": is_listed,
         }
@@ -479,13 +567,15 @@ class ChainReader:
             symbol = self._call_fn(erc20, "symbol") if erc20 else sym
             decimals = self._call_fn(erc20, "decimals") if erc20 else None
             balance = self._call_fn(erc20, "balanceOf", checksum) if erc20 else None
+            price_raw = self._get_price(addr)
             balances.append(
                 {
                     "symbol": symbol,
                     "underlying": addr,
                     "decimals": decimals,
                     "balance": balance,
-                    "price": self._get_price(addr),
+                    "price": self._to_float(self._price_to_usd(price_raw), "0.000001"),
+                    "priceUsd": self._to_float(self._price_to_usd(price_raw), "0.000001"),
                 }
             )
 
