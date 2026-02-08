@@ -1,8 +1,9 @@
 import asyncio
 import json
 import logging
+from decimal import Decimal
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from web3 import Web3
@@ -31,6 +32,60 @@ app = FastAPI(
     openapi_tags=tags_metadata,
 )
 db = Database(DB_PATH)
+
+UNDERLYING_AMOUNT_KEYS = {
+    "mintAmount",
+    "redeemAmount",
+    "borrowAmount",
+    "repayAmount",
+    "actualRepayAmount",
+    "accountBorrows",
+    "totalBorrows",
+}
+DTOKEN_AMOUNT_KEYS = {"mintTokens", "redeemTokens", "seizeTokens", "amount", "value"}
+
+
+def _to_int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        if value.startswith("0x"):
+            try:
+                return int(value, 16)
+            except ValueError:
+                return None
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _scale_token_amount(raw_amount: Optional[int], decimals: Optional[int]) -> Optional[float]:
+    if raw_amount is None or decimals is None:
+        return None
+    return float(Decimal(raw_amount) / (Decimal(10) ** decimals))
+
+
+def _normalize_event_args(
+    args: Dict[str, Any], underlying_decimals: Optional[int], dtoken_decimals: Optional[int]
+) -> Dict[str, Any]:
+    normalized = dict(args)
+    for key, value in args.items():
+        raw_amount = _to_int(value)
+        if raw_amount is None:
+            continue
+        if key in UNDERLYING_AMOUNT_KEYS:
+            scaled = _scale_token_amount(raw_amount, underlying_decimals)
+            if scaled is not None:
+                normalized[key] = scaled
+        elif key in DTOKEN_AMOUNT_KEYS:
+            scaled = _scale_token_amount(raw_amount, dtoken_decimals)
+            if scaled is not None:
+                normalized[key] = scaled
+    return normalized
 
 
 @app.on_event("startup")
@@ -76,6 +131,7 @@ def get_events(
     limit: int = Query(100, ge=1, le=1000, description="Max results to return"),
 ):
     """Query indexed blockchain events with optional filters for contract, event type, and block range."""
+    chain = getattr(app.state, "chain", None)
     results = db.query_events(
         contract=contract,
         event=event,
@@ -83,6 +139,16 @@ def get_events(
         to_block=toBlock,
         limit=limit,
     )
+    if chain:
+        for item in results:
+            units = chain.get_market_units(item.get("contract"))
+            args_raw = item.get("args") or {}
+            item["argsRaw"] = args_raw
+            item["args"] = _normalize_event_args(
+                args_raw,
+                units.get("underlyingDecimals"),
+                units.get("dTokenDecimals"),
+            )
     return {"items": results}
 
 
@@ -199,6 +265,7 @@ def get_event_amounts(
     limit: int = Query(5000, ge=1, le=50000, description="Max events to scan"),
 ):
     """Aggregate event amounts (sum and count) grouped by event type, optionally filtered by account."""
+    chain = getattr(app.state, "chain", None)
     rows = db.query_event_rows(
         contract=contract,
         event=event,
@@ -227,23 +294,6 @@ def get_event_amounts(
         "Transfer": ["from", "to"],
     }
 
-    def _to_int(value):
-        if value is None:
-            return None
-        if isinstance(value, int):
-            return value
-        if isinstance(value, str):
-            if value.startswith("0x"):
-                try:
-                    return int(value, 16)
-                except ValueError:
-                    return None
-            try:
-                return int(value)
-            except ValueError:
-                return None
-        return None
-
     def _match_account(args_dict, evt: str):
         if not account_lower:
             return True
@@ -261,18 +311,31 @@ def get_event_amounts(
         if account_lower and not _match_account(args, evt):
             continue
 
+        units = chain.get_market_units(row["contract"]) if chain else {}
+        underlying_decimals = units.get("underlyingDecimals")
+        dtoken_decimals = units.get("dTokenDecimals")
+
         keys = amount_keys.get(evt, [])
-        amount = None
+        amount_raw = None
+        amount_decimals = None
         for key in keys:
             if key in args:
-                amount = _to_int(args.get(key))
-                if amount is not None:
+                amount_raw = _to_int(args.get(key))
+                if amount_raw is not None:
+                    amount_decimals = (
+                        underlying_decimals if key in UNDERLYING_AMOUNT_KEYS else dtoken_decimals
+                    )
                     break
 
         if evt not in summary:
-            summary[evt] = {"count": 0, "amountSum": 0}
+            summary[evt] = {"count": 0, "amountSum": 0.0, "amountSumRaw": 0}
         summary[evt]["count"] += 1
-        if amount is not None:
-            summary[evt]["amountSum"] += amount
+        if amount_raw is not None:
+            summary[evt]["amountSumRaw"] += amount_raw
+            amount_scaled = _scale_token_amount(amount_raw, amount_decimals)
+            if amount_scaled is not None:
+                summary[evt]["amountSum"] += amount_scaled
+            else:
+                summary[evt]["amountSum"] += float(amount_raw)
 
     return {"items": summary, "limit": limit}

@@ -36,6 +36,7 @@ class ChainReader:
         self.liquidity_mining = self._build_liquidity_mining_contracts(
             self.liquidity_mining_addresses
         )
+        self._market_units_cache: Dict[str, Dict[str, Optional[int]]] = {}
 
     def _checksum(self, address: Optional[str]) -> Optional[str]:
         if not address:
@@ -165,6 +166,33 @@ class ChainReader:
         if amount is None or price_usd is None:
             return None
         return Decimal(str(amount)) * Decimal(str(price_usd))
+
+    def get_market_units(self, market_address: Optional[str]) -> Dict[str, Optional[int]]:
+        checksum = self._checksum(market_address)
+        if not checksum:
+            return {"underlyingDecimals": None, "dTokenDecimals": None}
+
+        cache_key = checksum.lower()
+        cached = self._market_units_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        market = None
+        for item in self.markets:
+            if item.address.lower() == cache_key:
+                market = item
+                break
+        if not market:
+            market = self._build_contract(checksum, self.market_abi)
+
+        dtoken_decimals = self._call_fn(market, "decimals") if market else None
+        underlying = self._call_fn(market, "underlying") if market else None
+        underlying_erc20 = self._get_erc20(underlying)
+        underlying_decimals = self._call_fn(underlying_erc20, "decimals") if underlying_erc20 else None
+
+        result = {"underlyingDecimals": underlying_decimals, "dTokenDecimals": dtoken_decimals}
+        self._market_units_cache[cache_key] = result
+        return result
 
     def get_markets(self) -> List[Dict[str, Any]]:
         results = []

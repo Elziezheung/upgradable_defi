@@ -142,6 +142,8 @@ On-chain actions completed.
 - `GET /liquidity-mining/{address}`：用户在各挖矿池的质押与收益。
 - 代币数量字段（如 `balance`、`supplyUnderlying`、`borrowBalance`、`totalStaked`、`stakedBalance`、`earned`、`govBalance`）均已按 `decimals` 转成可读数量（非原始链上整数）。
 - 比例/系数字段（如 `exchangeRate`、`collateralFactor`、`rewardPerToken`）已按 `1e18`（WAD）转成可读小数。
+- `GET /events` 中 `args` 的金额字段已按对应市场 `decimals` 转换；原始值保留在 `argsRaw`。
+- `GET /events/amounts` 中 `amountSum` 为可读数量；`amountSumRaw` 保留原始链上整数求和。
 
 ## 备注
 - 运行流程（联调时链要保持开启）：
