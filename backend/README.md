@@ -141,8 +141,10 @@ On-chain actions completed.
 - 运行流程（联调时链要保持开启）：
   1. 启动本地链：`anvil`
   2. 部署合约：`upgradable_defi/contracts/script/deploy_local.sh`
-  3. 写入地址配置：运行 `quick_extract_local.sh` 并写入 `backend/config/addresses.local.json`
-  4. 启动后端：`uvicorn app.main:app --reload`
+  3. 启动后端：`uvicorn app.main:app --reload`
+- 地址加载优先级：
+  - 默认自动扫描 `contracts/broadcast/*/run-latest.json` 并提取 `comptroller/markets/liquidityMining/priceOracle`。
+  - 若自动扫描失败，则回退到 `backend/config/addresses.local.json`。
 - 如果关闭 anvil，链上读数会失败或变为 `null/0`。
 - 默认从 `latest-2000` 开始索引（如无 `state.lastProcessedBlock`）。
 - 可通过环境变量修改：
@@ -153,3 +155,5 @@ On-chain actions completed.
   - `MARKET_ABI_NAME`（默认 `LendingToken`）
   - `COMPTROLLER_ABI_NAME`（默认 `Comptroller`）
   - `LIQUIDITY_MINING_ABI_NAME`（默认 `LiquidityMining`）
+  - `AUTO_DISCOVER_ADDRESSES`（默认 `1`，设为 `0` 可关闭自动发现）
+  - `RUN_JSON`（可显式指定 broadcast run json 路径）
