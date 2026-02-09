@@ -32,11 +32,6 @@ export const Transactions: React.FC<TransactionsProps> = ({ selectedMarket }) =>
     fetchTransactions();
   }, [selectedMarket, filter]);
 
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleString();
-  };
-
   if (loading && events.length === 0) {
     return (
       <div className="flex items-center justify-center h-96">

@@ -90,7 +90,7 @@ export const UserPortfolio: React.FC<UserPortfolioProps> = ({ account, loading, 
                 </tr>
               </thead>
               <tbody>
-                {account.positions.map((position, index) => (
+                {account.positions.map((position) => (
                   <tr
                     key={position.market}
                     className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors"

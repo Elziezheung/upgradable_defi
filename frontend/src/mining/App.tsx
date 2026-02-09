@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Header } from './components/Header';
 import { PoolsTable } from './components/PoolsTable';
 import { UserPortfolio } from './components/UserPortfolio';

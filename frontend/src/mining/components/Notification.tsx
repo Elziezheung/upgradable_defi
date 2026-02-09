@@ -23,6 +23,7 @@ export const Notification: React.FC<NotificationProps> = ({
       }, duration);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [duration, onClose]);
 
   const bgColor = {

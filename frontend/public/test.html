@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .test-box {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 测试页面</h1>
+
+    <div class="test-box">
+        <h2>基础测试</h2>
+        <p class="success">✅ HTML 正常加载</p>
+        <p class="success">✅ CSS 正常渲染</p>
+        <p id="js-test">⏳ 测试 JavaScript...</p>
+    </div>
+
+    <div class="test-box">
+        <h2>功能测试</h2>
+        <button onclick="alert('按钮点击成功！')">测试按钮</button>
+        <button onclick="document.getElementById('result').innerText = '你点击了第二个按钮！'">显示文字</button>
+        <p id="result"></p>
+    </div>
+
+    <script>
+        document.getElementById('js-test').innerHTML = '<span class="success">✅ JavaScript 正常运行</span>';
+        console.log('测试页面加载成功！');
+    </script>
+</body>
+</html>

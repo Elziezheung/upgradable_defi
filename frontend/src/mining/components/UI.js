@@ -1,0 +1,3 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+export const LoadingSpinner = () => (_jsx("div", { className: "fixed inset-0 bg-black/50 flex items-center justify-center z-50", children: _jsxs("div", { className: "text-center", children: [_jsx("div", { className: "inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-pink-500 mb-4" }), _jsx("p", { className: "text-white text-lg", children: "Loading..." })] }) }));
+export const EmptyState = ({ message, icon, }) => (_jsxs("div", { className: "text-center py-12 bg-slate-800 rounded-lg border border-slate-700", children: [icon && _jsx("div", { className: "mb-4 text-5xl", children: icon }), _jsx("p", { className: "text-gray-400 text-lg", children: message })] }));
