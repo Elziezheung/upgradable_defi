@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { AccountData, UserPosition } from '../types';
 import { formatPct, getPrice, formatUsd, shortAddress } from '../utils';
 import Web3Service from '../services/web3';
@@ -113,6 +113,13 @@ export function UserPositions({
 }: Props) {
   const [entering, setEntering] = useState(false);
 
+  // Sync balance when user lands on positions tab (e.g. after supply on markets page)
+  useEffect(() => {
+    if (connected && onRefetch) {
+      onRefetch();
+    }
+  }, [connected, onRefetch]);
+
   const handleEnterMarkets = async () => {
     if (!comptrollerAddress || !account || !onRefetch) return;
     const markets = account.positions.filter((p) => (p.supplyUnderlying ?? 0) > 0).map((p) => p.market);
@@ -129,7 +136,7 @@ export function UserPositions({
   if (!connected) {
     return (
       <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-12 text-center">
-        <p className="text-zinc-400">请先连接钱包</p>
+        <p className="text-zinc-400">Please connect your wallet first</p>
       </div>
     );
   }
@@ -138,7 +145,7 @@ export function UserPositions({
     return (
       <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-12 text-center">
         <div className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
-        <p className="mt-3 text-zinc-400">加载头寸中...</p>
+        <p className="mt-3 text-zinc-400">Loading positions...</p>
       </div>
     );
   }
@@ -146,7 +153,7 @@ export function UserPositions({
   if (!account || !account.positions?.length) {
     return (
       <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-12 text-center">
-        <p className="text-zinc-400">暂无头寸</p>
+        <p className="text-zinc-400">No positions yet</p>
       </div>
     );
   }
@@ -164,74 +171,74 @@ export function UserPositions({
   return (
     <div className="space-y-6">
       <p className="text-zinc-500 text-sm">
-        当前地址：<span className="font-mono text-zinc-300">{shortAddress(account.account)}</span>
+        Address: <span className="font-mono text-zinc-300">{shortAddress(account.account)}</span>
       </p>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-4">
-          <div className="text-zinc-500 text-xs mb-0.5">总供应 (USD)</div>
+          <div className="text-zinc-500 text-xs mb-0.5">Total Supplied (USD)</div>
           <div className="text-xl font-semibold text-white">{formatUsd(summary.totalSupplied)}</div>
         </div>
         <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-4">
-          <div className="text-zinc-500 text-xs mb-0.5">总借款 (USD)</div>
+          <div className="text-zinc-500 text-xs mb-0.5">Total Borrowed (USD)</div>
           <div className="text-xl font-semibold text-white">{formatUsd(summary.totalBorrowed)}</div>
         </div>
         <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-4">
-          <div className="text-zinc-500 text-xs mb-0.5">借款额度</div>
+          <div className="text-zinc-500 text-xs mb-0.5">Borrow Limit</div>
           <div className="text-xl font-semibold text-white">{formatUsd(summary.borrowLimit)}</div>
         </div>
         <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-4">
-          <div className="text-zinc-500 text-xs mb-0.5">健康状态</div>
+          <div className="text-zinc-500 text-xs mb-0.5">Health</div>
           <div
             className={`text-xl font-semibold ${account.isHealthy ? 'text-emerald-400' : 'text-red-400'}`}
           >
-            {account.isHealthy ? '健康' : '风险'}
+            {account.isHealthy ? 'Healthy' : 'At Risk'}
           </div>
         </div>
       </div>
 
       {showEnterMarkets && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/50 bg-amber-950/30 px-4 py-3 text-amber-200 text-sm">
-          <span>供应尚未作为抵押品，启用后可借款并显示额度。</span>
+          <span>Supply is not used as collateral yet. Enable it to borrow and show your limit.</span>
           <button
             type="button"
             onClick={handleEnterMarkets}
             disabled={entering}
             className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 font-medium text-white hover:bg-amber-500 disabled:opacity-50"
           >
-            {entering ? '处理中...' : '启用为抵押'}
+            {entering ? 'Processing...' : 'Enable as Collateral'}
           </button>
         </div>
       )}
 
       {supplyPositions.length > 0 && (
         <PositionTable
-          title="供应头寸"
+          title="Supply Positions"
           positions={supplyPositions}
           type="supply"
           valueKey="supplyUnderlying"
           apyKey="supplyRatePerYear"
           onAction={onWithdraw}
-          actionLabel="提取"
+          actionLabel="Withdraw"
           actionClass="bg-red-600/90 hover:bg-red-500 text-white"
         />
       )}
 
       {borrowPositions.length > 0 && (
         <PositionTable
-          title="借款头寸"
+          title="Borrow Positions"
           positions={borrowPositions}
           type="borrow"
           valueKey="borrowBalance"
           apyKey="borrowRatePerYear"
           onAction={onRepay}
-          actionLabel="还款"
+          actionLabel="Repay"
           actionClass="bg-teal-600/90 hover:bg-teal-500 text-white"
         />
       )}
 
       {supplyPositions.length === 0 && borrowPositions.length === 0 && (
-        <p className="text-zinc-500 text-sm text-center py-6">暂无供应或借款头寸</p>
+        <p className="text-zinc-500 text-sm text-center py-6">No supply or borrow positions yet</p>
       )}
     </div>
   );

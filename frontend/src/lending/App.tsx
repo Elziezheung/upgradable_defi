@@ -63,19 +63,20 @@ function LendingApp() {
       await refetchMarkets();
       if (account) await refetchAccount();
     } catch (e) {
-      setRefetchError(e instanceof Error ? e.message : '数据刷新失败');
+      setRefetchError(e instanceof Error ? e.message : 'Failed to refresh data');
     }
   };
 
   const handleModalSuccess = async () => {
     setRefetchError(null);
     try {
-      await new Promise((r) => setTimeout(r, 500));
+      // Wait for RPC/backend to see the new block so position balance is available
+      await new Promise((r) => setTimeout(r, 1200));
       await refetchMarkets();
       if (account) await refetchAccount();
       if (action === 'supply' || action === 'borrow') navigate('/lending/positions');
     } catch (e) {
-      setRefetchError(e instanceof Error ? e.message : '数据刷新失败');
+      setRefetchError(e instanceof Error ? e.message : 'Failed to refresh data');
     }
   };
 
@@ -99,13 +100,13 @@ function LendingApp() {
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
         {refetchError && (
           <div className="mb-4 flex items-center justify-between gap-4 rounded-xl border border-amber-700/50 bg-amber-950/30 px-4 py-3 text-amber-200 text-sm">
-            <span>{refetchError}，请点击刷新重试。</span>
+            <span>{refetchError}. Please click Refresh to retry.</span>
             <button
               type="button"
               onClick={refetch}
               className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 font-medium text-white hover:bg-amber-500"
             >
-              刷新
+              Refresh
             </button>
           </div>
         )}
@@ -121,15 +122,15 @@ function LendingApp() {
               onClick={refetch}
               className="mt-2 text-xs text-zinc-500 underline hover:text-zinc-300"
             >
-              刷新
+              Refresh
             </button>
           </div>
           <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-4">
-            <div className="text-xs text-zinc-500">平均 Supply APY</div>
+            <div className="text-xs text-zinc-500">Avg Supply APY</div>
             <div className="mt-0.5 text-2xl font-semibold text-emerald-400">{pct(avgSupply)}%</div>
           </div>
           <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-4">
-            <div className="text-xs text-zinc-500">平均 Borrow APY</div>
+            <div className="text-xs text-zinc-500">Avg Borrow APY</div>
             <div className="mt-0.5 text-2xl font-semibold text-amber-400">{pct(avgBorrow)}%</div>
           </div>
         </div>
@@ -137,7 +138,7 @@ function LendingApp() {
         <div className="space-y-6">
           {activeTab === 'markets' && (
             <section>
-              <h2 className="mb-4 text-xl font-semibold text-white">借贷市场</h2>
+              <h2 className="mb-4 text-xl font-semibold text-white">Lending Markets</h2>
               <MarketsTable
                 markets={markets}
                 loading={marketsLoading}
@@ -149,7 +150,7 @@ function LendingApp() {
 
           {activeTab === 'positions' && (
             <section>
-              <h2 className="mb-4 text-xl font-semibold text-white">我的头寸</h2>
+              <h2 className="mb-4 text-xl font-semibold text-white">My Positions</h2>
               <UserPositions
                 account={accountData}
                 loading={accountLoading}

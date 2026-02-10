@@ -57,7 +57,7 @@ export function MarketsTable({ markets, loading, onSupply, onBorrow }: Props) {
     return (
       <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 flex items-center justify-center h-64">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
-        <span className="ml-3 text-zinc-400">加载市场中...</span>
+        <span className="ml-3 text-zinc-400">Loading markets...</span>
       </div>
     );
   }
@@ -65,7 +65,7 @@ export function MarketsTable({ markets, loading, onSupply, onBorrow }: Props) {
   if (markets.length === 0) {
     return (
       <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-12 text-center text-zinc-400">
-        暂无市场
+        No markets available
       </div>
     );
   }
@@ -96,20 +96,20 @@ export function MarketsTable({ markets, loading, onSupply, onBorrow }: Props) {
     <div className="space-y-3">
       {!hasData && (
         <div className="rounded-xl border border-amber-700/50 bg-amber-950/30 px-4 py-3 text-amber-200 text-sm">
-          链上数据缺失，请确认 Anvil 已启动且合约已部署，并重启后端。
+          Chain data missing. Please ensure Anvil is running and contracts are deployed, then restart the backend.
         </div>
       )}
       <div className="rounded-xl border border-zinc-700/80 overflow-hidden bg-zinc-900/60">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-700/80 bg-zinc-800/80">
-              <Th label="资产" keyName="symbol" />
-              <Th label="总供应 (USD)" keyName="totalSupplyUsd" align="right" />
-              <th className="px-4 py-3 text-right font-medium text-zinc-400">总借款</th>
+              <Th label="Asset" keyName="symbol" />
+              <Th label="Total Supply (USD)" keyName="totalSupplyUsd" align="right" />
+              <th className="px-4 py-3 text-right font-medium text-zinc-400">Total Borrows</th>
               <Th label="Supply APY" keyName="supplyAPY" align="right" />
               <Th label="Borrow APY" keyName="borrowAPY" align="right" />
-              <th className="px-4 py-3 text-right font-medium text-zinc-400">利用率</th>
-              <th className="px-4 py-3 text-center font-medium text-zinc-400 w-40">操作</th>
+              <th className="px-4 py-3 text-right font-medium text-zinc-400">Utilization</th>
+              <th className="px-4 py-3 text-center font-medium text-zinc-400 w-40">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-700/60">
@@ -164,14 +164,14 @@ export function MarketsTable({ markets, loading, onSupply, onBorrow }: Props) {
                         onClick={() => onSupply(m)}
                         className="px-3 py-1.5 rounded-lg text-xs font-medium bg-teal-600/90 hover:bg-teal-500 text-white transition-colors"
                       >
-                        供应
+                        Supply
                       </button>
                       <button
                         type="button"
                         onClick={() => onBorrow(m)}
                         className="px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-600 hover:bg-zinc-500 text-white transition-colors"
                       >
-                        借款
+                        Borrow
                       </button>
                     </div>
                   </td>

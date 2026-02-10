@@ -22,7 +22,7 @@ export const useMarkets = () => {
       const data = await API.getMarkets();
       setMarkets(data);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '获取市场数据失败';
+      const msg = err instanceof Error ? err.message : 'Failed to fetch markets';
       setError(msg);
       throw err;
     } finally {
@@ -60,7 +60,7 @@ export const useAccount = (address: string | null) => {
       const data = await API.getAccount(address);
       setAccount(data);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '获取账户数据失败';
+      const msg = err instanceof Error ? err.message : 'Failed to fetch account';
       setError(msg);
       throw err;
     } finally {
@@ -108,7 +108,7 @@ export const useWallet = () => {
         setChainId(parseInt(chainIdHex as string, 16));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '连接钱包失败');
+      setError(err instanceof Error ? err.message : 'Failed to connect wallet');
     } finally {
       setLoading(false);
     }
@@ -178,7 +178,7 @@ export const useTransactions = (account: string | null, limit: number = 50) => {
       const events = await API.getEvents(undefined, undefined, account, undefined, undefined, limit);
       setTransactions(events);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '获取交易记录失败');
+      setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
     } finally {
       setLoading(false);
     }
@@ -218,7 +218,7 @@ export const useHealth = () => {
       const data = await API.getHealth();
       setHealth(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '获取系统状态失败');
+      setError(err instanceof Error ? err.message : 'Failed to fetch system status');
     } finally {
       setLoading(false);
     }

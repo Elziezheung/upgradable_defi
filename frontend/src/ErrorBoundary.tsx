@@ -44,7 +44,7 @@ export class ErrorBoundary extends Component<Props, State> {
         >
           <div style={{ maxWidth: '600px', margin: '0 auto' }}>
             <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#f87171' }}>
-              页面加载出错
+              Page load error
             </h1>
             <p style={{ marginBottom: '0.5rem' }}>{this.state.error.message}</p>
             {this.state.errorInfo?.componentStack && (
@@ -63,8 +63,8 @@ export class ErrorBoundary extends Component<Props, State> {
               </pre>
             )}
             <p style={{ marginTop: '1.5rem', fontSize: '0.875rem', color: '#94a3b8' }}>
-              请打开浏览器开发者工具 (F12) 查看 Console 中的完整错误。
-              若从其他设备访问，请确保后端 API 地址正确（如设置 VITE_API_URL 为实际后端地址）。
+              Open browser developer tools (F12) to view the full error in Console.
+              If accessing from another device, ensure the backend API URL is correct (e.g. set VITE_API_URL to the actual backend address).
             </p>
             <button
               type="button"
@@ -79,7 +79,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 cursor: 'pointer',
               }}
             >
-              重试
+              Retry
             </button>
           </div>
         </div>

@@ -9,9 +9,9 @@ type Props = {
 };
 
 const TABS: { path: string; label: string }[] = [
-  { path: '/lending/markets', label: '市场' },
-  { path: '/lending/positions', label: '头寸' },
-  { path: '/lending/liquidate', label: '清算' },
+  { path: '/lending/markets', label: 'Markets' },
+  { path: '/lending/positions', label: 'Positions' },
+  { path: '/lending/liquidate', label: 'Liquidate' },
 ];
 
 export function Header({ account, isConnected, onConnect, onDisconnect }: Props) {
@@ -46,7 +46,7 @@ export function Header({ account, isConnected, onConnect, onDisconnect }: Props)
           {isConnected && account ? (
             <div className="flex items-center gap-3">
               <span className="hidden text-right sm:block">
-                <span className="block text-xs text-zinc-500">已连接</span>
+                <span className="block text-xs text-zinc-500">Connected</span>
                 <span className="font-mono text-sm text-zinc-200">{shortAddress(account)}</span>
               </span>
               <button
@@ -54,7 +54,7 @@ export function Header({ account, isConnected, onConnect, onDisconnect }: Props)
                 onClick={onDisconnect}
                 className="rounded-lg bg-red-600/90 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
               >
-                断开
+                Disconnect
               </button>
             </div>
           ) : (
@@ -63,7 +63,7 @@ export function Header({ account, isConnected, onConnect, onDisconnect }: Props)
               onClick={onConnect}
               className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500"
             >
-              连接钱包
+              Connect Wallet
             </button>
           )}
         </div>

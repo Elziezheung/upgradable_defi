@@ -44,8 +44,8 @@ function AppSwitcher() {
   return (
     <div style={appSwitcherBase}>
       <div style={{ display: 'flex', gap: '8px' }}>
-        {btn('/lending/markets', isLending, '💰 借贷', '#2563eb')}
-        {btn('/mining', isMining, '⛏️ 挖矿', '#9333ea')}
+        {btn('/lending/markets', isLending, '💰 Lending', '#2563eb')}
+        {btn('/mining', isMining, '⛏️ Mining', '#9333ea')}
       </div>
     </div>
   );

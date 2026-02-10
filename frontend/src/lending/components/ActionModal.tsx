@@ -14,10 +14,10 @@ type Props = {
 };
 
 const LABELS: Record<LendingAction, string> = {
-  supply: '供应',
-  withdraw: '提取',
-  borrow: '借款',
-  repay: '还款',
+  supply: 'Supply',
+  withdraw: 'Withdraw',
+  borrow: 'Borrow',
+  repay: 'Repay',
 };
 
 export function ActionModal({
@@ -50,7 +50,7 @@ export function ActionModal({
     setTxHash(null);
     const num = parseFloat(amount);
     if (!amount || num <= 0) {
-      setError('请输入有效金额');
+      setError('Please enter a valid amount');
       return;
     }
     setLoading(true);
@@ -77,7 +77,7 @@ export function ActionModal({
       await new Promise((r) => setTimeout(r, 500));
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '交易失败');
+      setError(err instanceof Error ? err.message : 'Transaction failed');
     } finally {
       setLoading(false);
     }
@@ -107,7 +107,7 @@ export function ActionModal({
             type="button"
             onClick={onClose}
             className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-            aria-label="关闭"
+            aria-label="Close"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -122,13 +122,13 @@ export function ActionModal({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="font-medium text-white">交易成功</p>
+            <p className="font-medium text-white">Transaction successful</p>
             <p className="mt-1 text-xs text-zinc-500 font-mono">{txHash.slice(0, 10)}...{txHash.slice(-8)}</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
             <div className="mb-4">
-              <label className="mb-1.5 block text-sm font-medium text-zinc-400">金额</label>
+              <label className="mb-1.5 block text-sm font-medium text-zinc-400">Amount</label>
               <div className="relative">
                 <input
                   type="number"
@@ -154,7 +154,7 @@ export function ActionModal({
               </div>
               {maxAmount && parseFloat(maxAmount) > 0 && (
                 <p className="mt-1 text-xs text-zinc-500">
-                  可用: {parseFloat(maxAmount).toFixed(4)} {market.symbol}
+                  Available: {parseFloat(maxAmount).toFixed(4)} {market.symbol}
                 </p>
               )}
             </div>
@@ -165,11 +165,11 @@ export function ActionModal({
                 <span className={isSupplyOrWithdraw ? 'text-emerald-400' : 'text-amber-400'}>{ratePct}%</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">抵押因子</span>
+                <span className="text-zinc-500">Collateral Factor</span>
                 <span className="text-zinc-300">{cfPct.toFixed(0)}%</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">利用率</span>
+                <span className="text-zinc-500">Utilization</span>
                 <span className="text-zinc-300">{utilPct}%</span>
               </div>
             </div>
@@ -187,7 +187,7 @@ export function ActionModal({
                 className="flex-1 rounded-lg border border-zinc-600 bg-zinc-800 py-2.5 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
                 disabled={loading}
               >
-                取消
+                Cancel
               </button>
               <button
                 type="submit"
@@ -197,7 +197,7 @@ export function ActionModal({
                 {loading ? (
                   <span className="inline-flex items-center gap-2">
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    处理中
+                    Processing
                   </span>
                 ) : (
                   LABELS[action]

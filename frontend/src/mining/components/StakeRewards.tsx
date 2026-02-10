@@ -105,7 +105,7 @@ export const StakeRewards: React.FC<StakeRewardsProps> = ({
   if (!isConnected) {
     return (
       <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 text-center">
-        <p className="text-gray-400">请先连接钱包后再质押 dToken 或领取 GOV。</p>
+        <p className="text-gray-400">Please connect your wallet first to stake dToken or claim GOV.</p>
       </div>
     );
   }
@@ -126,7 +126,7 @@ export const StakeRewards: React.FC<StakeRewardsProps> = ({
           onClick={fetchData}
           className="mt-2 px-4 py-2 rounded-lg bg-slate-600 text-white text-sm"
         >
-          重试
+          Retry
         </button>
       </div>
     );
@@ -135,7 +135,7 @@ export const StakeRewards: React.FC<StakeRewardsProps> = ({
   if (pools.length === 0) {
     return (
       <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 text-center">
-        <p className="text-gray-400">暂无流动性挖矿池。</p>
+        <p className="text-gray-400">No liquidity mining pools available.</p>
       </div>
     );
   }
@@ -143,14 +143,14 @@ export const StakeRewards: React.FC<StakeRewardsProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-white mb-2">质押 dToken 领 GOV</h2>
+        <h2 className="text-2xl font-bold text-white mb-2">Stake dToken to Earn GOV</h2>
         <p className="text-gray-400 text-sm">
-          将借贷市场的 dToken（如 dUSDC、dWETH）质押到挖矿合约，按时间加权领取治理代币 (GOV)。
+          Stake dTokens from lending markets (e.g. dUSDC, dWETH) in the mining contract to earn governance tokens (GOV) on a time-weighted basis.
         </p>
       </div>
 
       {txHash && (
-        <p className="text-green-400 text-sm">最近交易: {txHash.slice(0, 16)}...</p>
+        <p className="text-green-400 text-sm">Recent tx: {txHash.slice(0, 16)}...</p>
       )}
 
       <div className="space-y-4">
@@ -176,11 +176,11 @@ export const StakeRewards: React.FC<StakeRewardsProps> = ({
                 </div>
                 <div className="flex gap-4 text-sm">
                   <div>
-                    <span className="text-gray-400">已质押: </span>
+                    <span className="text-gray-400">Staked: </span>
                     <span className="text-white font-medium">{staked.toFixed(4)}</span>
                   </div>
                   <div>
-                    <span className="text-gray-400">待领取: </span>
+                    <span className="text-gray-400">Earned: </span>
                     <span className="text-green-400 font-medium">{earned.toFixed(4)} GOV</span>
                   </div>
                 </div>
@@ -188,7 +188,7 @@ export const StakeRewards: React.FC<StakeRewardsProps> = ({
 
               <div className="mt-4 flex flex-wrap items-end gap-3">
                 <div className="flex-1 min-w-[120px]">
-                  <label className="block text-xs text-gray-400 mb-1">质押数量</label>
+                  <label className="block text-xs text-gray-400 mb-1">Stake Amount</label>
                   <input
                     type="text"
                     value={stakeAmt}
@@ -209,7 +209,7 @@ export const StakeRewards: React.FC<StakeRewardsProps> = ({
                 </button>
 
                 <div className="flex-1 min-w-[120px]">
-                  <label className="block text-xs text-gray-400 mb-1">取回数量</label>
+                  <label className="block text-xs text-gray-400 mb-1">Withdraw Amount</label>
                   <input
                     type="text"
                     value={withdrawAmt}

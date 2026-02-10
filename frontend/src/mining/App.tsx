@@ -21,7 +21,7 @@ function MiningApp() {
   const { account, loading: accountLoading } = useAccount(wallet.account || null);
   const { health } = useHealth();
 
-  // 计算总TVL
+  // Calculate total TVL
   const totalTVL = markets.reduce((sum, market) => {
     const supply = market.totalSupply || 0;
     const price = market.price || 0;
@@ -31,7 +31,7 @@ function MiningApp() {
     return sum + tvl;
   }, 0);
 
-  // 计算平均收益率
+  // Calculate average yield
   const avgSupplyAPR =
     markets.length > 0
       ? markets.reduce((sum, m) => sum + (m.supplyRatePerYear || 0), 0) / markets.length

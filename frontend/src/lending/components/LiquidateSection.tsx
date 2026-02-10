@@ -30,7 +30,7 @@ export const LiquidateSection: React.FC<LiquidateSectionProps> = ({
     setError(null);
     setTxHash(null);
     if (!repayMarket || !collateralMarket || !amount || !borrower.trim()) {
-      setError('请填写借款人地址、偿还市场、抵押品市场与金额');
+      setError('Please fill in borrower address, repay market, collateral market and amount');
       return;
     }
 
@@ -47,7 +47,7 @@ export const LiquidateSection: React.FC<LiquidateSectionProps> = ({
       setAmount('');
       onSuccess?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '清算失败');
+      setError(err instanceof Error ? err.message : 'Liquidation failed');
     } finally {
       setLoading(false);
     }
@@ -56,7 +56,7 @@ export const LiquidateSection: React.FC<LiquidateSectionProps> = ({
   if (!isConnected) {
     return (
       <div className="bg-slate-800 rounded-lg border border-slate-700 p-8 text-center">
-        <p className="text-gray-400">请先连接钱包后再执行清算。</p>
+        <p className="text-gray-400">Please connect your wallet first to execute liquidation.</p>
       </div>
     );
   }
@@ -64,15 +64,15 @@ export const LiquidateSection: React.FC<LiquidateSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-white mb-2">清算 (Liquidate)</h2>
+        <h2 className="text-2xl font-bold text-white mb-2">Liquidate</h2>
         <p className="text-gray-400 text-sm">
-          为不健康头寸偿还部分债务，并按清算激励获得借款人的抵押品。请确保借款人已处于 shortfall &gt; 0（不健康）状态。
+          Repay part of an unhealthy position&apos;s debt and receive the borrower&apos;s collateral as liquidation incentive. Ensure the borrower is in shortfall &gt; 0 (unhealthy) state.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-slate-800 rounded-lg border border-slate-700 p-6 max-w-lg space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">借款人地址 (Borrower)</label>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Borrower Address</label>
           <input
             type="text"
             value={borrower}
@@ -83,13 +83,13 @@ export const LiquidateSection: React.FC<LiquidateSectionProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">偿还市场 (Repay this debt)</label>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Repay Market (this debt)</label>
           <select
             value={repayMarket?.market ?? ''}
             onChange={(e) => setRepayMarket(markets.find((m) => m.market === e.target.value) ?? null)}
             className="w-full px-4 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white"
           >
-            <option value="">选择市场</option>
+            <option value="">Select market</option>
             {markets.map((m) => (
               <option key={m.market} value={m.market}>
                 {(m.symbol ?? '') + ' (' + (m.market?.slice(0, 8) ?? '') + '...)'}
@@ -99,7 +99,7 @@ export const LiquidateSection: React.FC<LiquidateSectionProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">偿还数量 (Repay amount)</label>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Repay Amount</label>
           <input
             type="text"
             value={amount}
@@ -110,13 +110,13 @@ export const LiquidateSection: React.FC<LiquidateSectionProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">没收抵押品市场 (Seize collateral)</label>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Collateral Market (to seize)</label>
           <select
             value={collateralMarket?.market ?? ''}
             onChange={(e) => setCollateralMarket(markets.find((m) => m.market === e.target.value) ?? null)}
             className="w-full px-4 py-2 rounded-lg bg-slate-700 border border-slate-600 text-white"
           >
-            <option value="">选择市场</option>
+            <option value="">Select market</option>
             {markets.map((m) => (
               <option key={m.market} value={m.market}>
                 {(m.symbol ?? '') + ' (' + (m.market?.slice(0, 8) ?? '') + '...)'}
@@ -126,14 +126,14 @@ export const LiquidateSection: React.FC<LiquidateSectionProps> = ({
         </div>
 
         {error && <p className="text-red-400 text-sm">{error}</p>}
-        {txHash && <p className="text-green-400 text-sm">交易已发送: {txHash.slice(0, 10)}...</p>}
+        {txHash && <p className="text-green-400 text-sm">Transaction sent: {txHash.slice(0, 10)}...</p>}
 
         <button
           type="submit"
           disabled={loading}
           className="w-full px-4 py-3 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-medium"
         >
-          {loading ? '提交中...' : '执行清算'}
+          {loading ? 'Submitting...' : 'Execute Liquidation'}
         </button>
       </form>
     </div>
