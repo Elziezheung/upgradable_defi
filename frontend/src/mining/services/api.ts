@@ -63,6 +63,38 @@ export interface Event {
   args: Record<string, any>;
 }
 
+export interface ContractAddressMarketDetail {
+  market: string;
+  underlying: string | null;
+  symbol: string | null;
+  decimals: number | null;
+}
+
+export interface ContractAddressLiquidityMiningDetail {
+  mining: string;
+  stakingToken: string | null;
+  stakingSymbol: string | null;
+  rewardsToken: string | null;
+  rewardsSymbol: string | null;
+}
+
+export interface ContractAddressRewardToken {
+  token: string;
+  symbol: string | null;
+  decimals: number | null;
+}
+
+export interface ContractAddresses {
+  chainId: number;
+  comptroller: string | null;
+  priceOracle: string | null;
+  markets: string[];
+  liquidityMining: string[];
+  marketDetails: ContractAddressMarketDetail[];
+  liquidityMiningDetails: ContractAddressLiquidityMiningDetail[];
+  rewardTokens: ContractAddressRewardToken[];
+}
+
 class APIService {
   async getHealth(): Promise<HealthStatus> {
     const response = await apiClient.get('/health');
@@ -76,6 +108,13 @@ class APIService {
 
   async getAccount(address: string): Promise<Account> {
     const response = await apiClient.get(`/accounts/${address}`);
+    return response.data;
+  }
+
+  async getContractAddresses(refresh: boolean = false): Promise<ContractAddresses> {
+    const response = await apiClient.get('/contracts/addresses', {
+      params: refresh ? { refresh: 'true' } : undefined,
+    });
     return response.data;
   }
 

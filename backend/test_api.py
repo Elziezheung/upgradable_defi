@@ -23,6 +23,9 @@ def main():
     print("GET /health")
     print(json.dumps(get("/health"), indent=2))
 
+    print("\nGET /contracts/addresses?refresh=true")
+    print(json.dumps(get("/contracts/addresses", {"refresh": "true"}), indent=2))
+
     print("\nGET /markets")
     markets = get("/markets")
     print(json.dumps(markets, indent=2))
@@ -38,15 +41,6 @@ def main():
 
     print("\nGET /account/wallet")
     print(json.dumps(get("/account/wallet", {"account": account, "assets": "USDC"}), indent=2))
-
-    print("\nGET /events")
-    print(json.dumps(get("/events", {"limit": 5}), indent=2))
-
-    print("\nGET /stats")
-    print(json.dumps(get("/stats"), indent=2))
-
-    print("\nGET /events/amounts")
-    print(json.dumps(get("/events/amounts", {"account": account}), indent=2))
 
     print("\nGET /liquidity-mining")
     print(json.dumps(get("/liquidity-mining"), indent=2))

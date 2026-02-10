@@ -40,3 +40,9 @@ backend/indexer.db
 backend/*.db
 backend/.env
 backend/**/__pycache__/
+
+# local foundry/dependency artifacts
+broadcast/
+cache/
+lib/
+tash pop

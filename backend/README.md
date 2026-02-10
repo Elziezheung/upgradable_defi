@@ -1,6 +1,6 @@
 # backend
 
-FastAPI + web3.py + SQLite 后端，用于本地 anvil(31337) 合约事件索引与查询。
+FastAPI + web3.py + SQLite 后端，用于本地 anvil(31337) 合约读数与查询。
 
 ## 环境要求
 - Python 3.9
@@ -115,38 +115,38 @@ On-chain actions completed.
 
 ## API
 - `GET /health`
-- `GET /events?contract=&event=&fromBlock=&toBlock=&limit=`
-- `GET /events/amounts?contract=&event=&account=&fromBlock=&toBlock=&limit=`
+- `GET /contracts/addresses`
 - `GET /markets`
 - `GET /markets/summary`
 - `GET /markets/timeseries?from=&to=&interval=`
 - `GET /accounts/{address}?market=`
 - `GET /account/overview?account=`
 - `GET /account/wallet?account=&assets=`
-- `GET /stats?contract=&event=&fromBlock=&toBlock=`
 - `GET /liquidity-mining`
 - `GET /liquidity-mining/{address}`
 
 ### API 说明
 - `GET /health`：链与索引状态（chainId、latestBlock、indexedToBlock）。
-- `GET /events`：事件查询（按合约/事件名/区块范围过滤）。
-- `GET /events/amounts`：事件金额统计（按事件聚合金额与次数，可过滤账户）。
+- `GET /contracts/addresses`：返回后端当前使用的实时部署地址（`comptroller`、`priceOracle`、`markets`、`liquidityMining`）以及 `marketDetails`/`liquidityMiningDetails` 映射，供前端运行时动态读取。支持 `refresh=true` 触发重新扫描部署地址并即时刷新。
 - `GET /markets`：市场汇总（供给/借款/利率/利用率/价格/抵押系数）。
 - `GET /markets/summary`：市场顶部聚合指标（总供给/赚取/借款/抵押，USD）。
 - `GET /markets/timeseries`：按天/小时聚合（默认最近 30 天，当前为静态快照）。
 - `GET /accounts/{address}`：用户头寸（供给/借款/健康度），支持 `market` 仅返回指定市场。
 - `GET /account/overview`：用户概览（净 APR、借款能力、可借额度）。
 - `GET /account/wallet`：钱包余额（按资产过滤，返回余额与价格）。
-- `GET /stats`：事件统计（按合约+事件分组计数）。
 - `GET /liquidity-mining`：挖矿池汇总（质押/奖励 token、总质押、奖励速率）。
 - `GET /liquidity-mining/{address}`：用户在各挖矿池的质押与收益。
+- 代币数量字段（如 `balance`、`supplyUnderlying`、`borrowBalance`、`totalStaked`、`stakedBalance`、`earned`、`govBalance`）均已按 `decimals` 转成可读数量（非原始链上整数）。
+- 比例/系数字段（如 `exchangeRate`、`collateralFactor`、`rewardPerToken`）已按 `1e18`（WAD）转成可读小数。
 
 ## 备注
 - 运行流程（联调时链要保持开启）：
   1. 启动本地链：`anvil`
   2. 部署合约：`upgradable_defi/contracts/script/deploy_local.sh`
-  3. 写入地址配置：运行 `quick_extract_local.sh` 并写入 `backend/config/addresses.local.json`
-  4. 启动后端：`uvicorn app.main:app --reload`
+  3. 启动后端：`uvicorn app.main:app --reload`
+- 地址加载优先级：
+  - 默认自动扫描 `contracts/broadcast/*/run-latest.json` 并提取 `comptroller/markets/liquidityMining/priceOracle`。
+  - 若自动扫描失败，则回退到 `backend/config/addresses.local.json`。
 - 如果关闭 anvil，链上读数会失败或变为 `null/0`。
 - 默认从 `latest-2000` 开始索引（如无 `state.lastProcessedBlock`）。
 - 可通过环境变量修改：
@@ -157,3 +157,5 @@ On-chain actions completed.
   - `MARKET_ABI_NAME`（默认 `LendingToken`）
   - `COMPTROLLER_ABI_NAME`（默认 `Comptroller`）
   - `LIQUIDITY_MINING_ABI_NAME`（默认 `LiquidityMining`）
+  - `AUTO_DISCOVER_ADDRESSES`（默认 `1`，设为 `0` 可关闭自动发现）
+  - `RUN_JSON`（可显式指定 broadcast run json 路径）

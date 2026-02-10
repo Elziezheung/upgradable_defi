@@ -1,119 +1,99 @@
-import React, { useState } from 'react';
-import { Header } from '@/components/Header';
-import { PoolsTable } from '@/components/PoolsTable';
-import { UserPortfolio } from '@/components/UserPortfolio';
-import { Transactions } from '@/components/Transactions';
-import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
-import { StatCard } from '@/components/StatCard';
-import { useMarkets, useAccount, useHealth } from '@/hooks/useAPI';
-import { useWallet } from '@/hooks/useWallet';
+import { useState } from 'react';
+import MiningApp from './mining/App';
+import LendingApp from './lending/App';
 
+/**
+ * Main App Component
+ * Container for different application pages
+ *
+ * Available pages:
+ * - Lending: DeFi lending and borrowing interface
+ * - Mining: Liquidity mining and rewards interface
+ */
 function App() {
-  const [activeTab, setActiveTab] = useState<'pools' | 'portfolio' | 'transactions' | 'analytics'>('pools');
-  const { markets, loading: marketsLoading } = useMarkets();
-  const { wallet } = useWallet();
-  const { account, loading: accountLoading } = useAccount(wallet.account || null);
-  const { health } = useHealth();
-
-  // 计算总TVL
-  const totalTVL = markets.reduce((sum, market) => {
-    const tvl = (market.totalSupply || 0) * (market.price || 0) / 10 ** (market.decimals || 18);
-    return sum + tvl;
-  }, 0);
-
-  // 计算平均收益率
-  const avgSupplyAPR =
-    markets.length > 0
-      ? markets.reduce((sum, m) => sum + (m.supplyRatePerYear || 0), 0) / markets.length
-      : 0;
+  const [currentApp, setCurrentApp] = useState<'lending' | 'mining'>('lending');
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white">
-      <Header activeTab={activeTab} setActiveTab={setActiveTab as any} />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Overview Stats - Hidden on Analytics tab */}
-        {activeTab !== 'analytics' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <StatCard
-              label="Total TVL"
-              value={`$${(totalTVL / 1e6).toFixed(2)}`}
-              unit="M"
-              change={{ value: 4.07, isPositive: true }}
-            />
-            <StatCard
-              label="Available Pools"
-              value={markets.length}
-              change={{ value: 0, isPositive: true }}
-            />
-            <StatCard
-              label="Average Supply APR"
-              value={`${(avgSupplyAPR * 100).toFixed(2)}`}
-              unit="%"
-            />
-            {health && (
-              <StatCard
-                label="Indexed to Block"
-                value={health.indexedToBlock}
-                change={{
-                  value: health.latestBlock - health.indexedToBlock,
-                  isPositive: true,
-                }}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Main Content */}
-        <div className="space-y-8">
-          {activeTab === 'pools' && (
-            <div>
-              <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-3xl font-bold">Liquidity Pools</h2>
-                <div className="text-sm text-gray-400">
-                  {markets.length} pools available
-                </div>
-              </div>
-              <PoolsTable markets={markets} loading={marketsLoading} />
-            </div>
-          )}
-
-          {activeTab === 'portfolio' && (
-            <div>
-              <h2 className="text-3xl font-bold mb-6">Your Portfolio</h2>
-              <UserPortfolio
-                account={account}
-                loading={accountLoading}
-                connected={wallet.isConnected}
-              />
-            </div>
-          )}
-
-          {activeTab === 'transactions' && (
-            <div>
-              <h2 className="text-3xl font-bold mb-6">Recent Transactions</h2>
-              <Transactions />
-            </div>
-          )}
-
-          {activeTab === 'analytics' && (
-            <div>
-              <h2 className="text-3xl font-bold mb-6">Market Analytics</h2>
-              <AnalyticsDashboard markets={markets} />
-            </div>
-          )}
+    <div className="min-h-screen">
+      {/* App Switcher - Top right, below header to avoid overlap with Connect button */}
+      <div style={{
+        position: 'fixed',
+        top: '90px',
+        right: '20px',
+        zIndex: 10000,
+        background: '#0f172a',
+        borderRadius: '12px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+        border: '2px solid #334155',
+        padding: '8px',
+        backdropFilter: 'blur(10px)'
+      }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => setCurrentApp('lending')}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease',
+              background: currentApp === 'lending' ? '#2563eb' : '#1e293b',
+              color: currentApp === 'lending' ? 'white' : '#94a3b8',
+              transform: currentApp === 'lending' ? 'scale(1.05)' : 'scale(1)',
+              boxShadow: currentApp === 'lending' ? '0 10px 15px -3px rgba(37, 99, 235, 0.4)' : 'none',
+              border: currentApp === 'lending' ? '2px solid #3b82f6' : '2px solid #334155'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = currentApp === 'lending' ? '#1d4ed8' : '#334155';
+              e.currentTarget.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = currentApp === 'lending' ? '#2563eb' : '#1e293b';
+              e.currentTarget.style.color = currentApp === 'lending' ? 'white' : '#94a3b8';
+            }}
+          >
+            💰 借贷
+          </button>
+          <button
+            onClick={() => setCurrentApp('mining')}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease',
+              background: currentApp === 'mining' ? '#9333ea' : '#1e293b',
+              color: currentApp === 'mining' ? 'white' : '#94a3b8',
+              transform: currentApp === 'mining' ? 'scale(1.05)' : 'scale(1)',
+              boxShadow: currentApp === 'mining' ? '0 10px 15px -3px rgba(147, 51, 234, 0.4)' : 'none',
+              border: currentApp === 'mining' ? '2px solid #a855f7' : '2px solid #334155'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = currentApp === 'mining' ? '#7c3aed' : '#334155';
+              e.currentTarget.style.color = 'white';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = currentApp === 'mining' ? '#9333ea' : '#1e293b';
+              e.currentTarget.style.color = currentApp === 'mining' ? 'white' : '#94a3b8';
+            }}
+          >
+            ⛏️ 挖矿
+          </button>
         </div>
+      </div>
 
-        {/* Footer Info */}
-        <div className="mt-16 pt-8 border-t border-slate-700 text-center text-gray-400 text-sm">
-          {health && (
-            <p>
-              Chain ID: {health.chainId} • Latest Block: {health.latestBlock} • Synced to Block:{' '}
-              {health.indexedToBlock}
-            </p>
-          )}
-        </div>
-      </main>
+      {/* Render current app without padding */}
+      <div>
+        {currentApp === 'lending' ? <LendingApp /> : <MiningApp />}
+      </div>
     </div>
   );
 }

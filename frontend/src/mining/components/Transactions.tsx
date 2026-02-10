@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import API from '@/services/api';
+import API from '@/mining/services/api';
 
 interface TransactionsProps {
   selectedMarket?: string;
@@ -31,11 +31,6 @@ export const Transactions: React.FC<TransactionsProps> = ({ selectedMarket }) =>
   React.useEffect(() => {
     fetchTransactions();
   }, [selectedMarket, filter]);
-
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleString();
-  };
 
   if (loading && events.length === 0) {
     return (

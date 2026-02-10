@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Market } from '@/services/api';
+import type { Market } from '@/mining/services/api';
 
 interface AnalyticsDashboardProps {
   markets: Market[];

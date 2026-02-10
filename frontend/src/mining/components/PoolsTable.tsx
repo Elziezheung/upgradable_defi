@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import type { Market } from '@/services/api';
-import Web3Service from '@/services/web3';
+import React, { useMemo, useState, useEffect } from 'react';
+import type { Market } from '@/mining/services/api';
+import Web3Service from '@/mining/services/web3';
 
 interface PoolsTableProps {
   markets: Market[];
@@ -12,7 +12,9 @@ export const PoolsTable: React.FC<PoolsTableProps> = ({ markets, loading }) => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
   const [supplyAmount, setSupplyAmount] = useState('');
+  const [userBalance, setUserBalance] = useState<string>('0');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSupplying, setIsSupplying] = useState(false);
 
   const sortedMarkets = useMemo(() => {
     const sorted = [...markets].sort((a, b) => {
@@ -37,12 +39,30 @@ export const PoolsTable: React.FC<PoolsTableProps> = ({ markets, loading }) => {
     }
   };
 
+  // Fetch user's balance when modal opens
+  useEffect(() => {
+    if (isModalOpen && selectedMarket?.underlying && Web3Service.getAccount()) {
+      Web3Service.getTokenBalance(selectedMarket.underlying).then(balance => {
+        if (selectedMarket.decimals) {
+          const formatted = Number(balance) / (10 ** selectedMarket.decimals);
+          setUserBalance(formatted.toFixed(2));
+        }
+      });
+    }
+  }, [isModalOpen, selectedMarket]);
+
   const formatValue = (value: number | null, decimals: number = 2): string => {
     if (value === null || value === undefined) return '-';
     if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
     if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
     if (value >= 1e3) return `$${(value / 1e3).toFixed(2)}K`;
     return `$${value.toFixed(decimals)}`;
+  };
+
+  const formatSupplyValue = (supply: number | null, price: number | null, decimals: number | null): string => {
+    if (supply === null || price === null || decimals === null) return '-';
+    const supplyValue = (supply * price) / Math.pow(10, decimals + 8); // price is in 8 decimals
+    return formatValue(supplyValue, decimals);
   };
 
   const formatRate = (value: number | null): string => {
@@ -147,7 +167,7 @@ export const PoolsTable: React.FC<PoolsTableProps> = ({ markets, loading }) => {
                 </td>
                 <td className="text-right px-6 py-4">
                   <span className="text-white font-medium">
-                    {formatValue(market.totalSupply, 0)}
+                    {formatSupplyValue(market.totalSupply, market.price, market.decimals)}
                   </span>
                 </td>
                 <td className="text-right px-6 py-4">
@@ -179,7 +199,9 @@ export const PoolsTable: React.FC<PoolsTableProps> = ({ markets, loading }) => {
                 </td>
                 <td className="text-right px-6 py-4">
                   <span className="text-white font-medium">
-                    ${(market.price || 0).toFixed(4)}
+                    {market.price !== null && market.price !== undefined
+                      ? `$${(market.price / 1e8).toFixed(2)}`
+                      : '-'}
                   </span>
                 </td>
                 <td className="text-center px-6 py-4">
@@ -204,16 +226,39 @@ export const PoolsTable: React.FC<PoolsTableProps> = ({ markets, loading }) => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-slate-800 rounded-lg p-6 w-full max-w-md border border-slate-700">
             <h3 className="text-xl font-bold mb-4">Supply {selectedMarket.symbol}</h3>
+
+            <div className="mb-4 p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-gray-400">Your Balance</span>
+                <span className="text-white font-medium">{userBalance} {selectedMarket.symbol}</span>
+              </div>
+            </div>
+
             <div className="mb-4">
               <label className="block text-sm text-gray-400 mb-2">Amount</label>
-              <input
-                type="number"
-                value={supplyAmount}
-                onChange={(e) => setSupplyAmount(e.target.value)}
-                placeholder="0.0"
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-pink-500"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={supplyAmount}
+                  onChange={(e) => setSupplyAmount(e.target.value)}
+                  placeholder="0.0"
+                  className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-pink-500"
+                />
+                <button
+                  onClick={() => setSupplyAmount(userBalance)}
+                  className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors border border-slate-600"
+                  title="Set to maximum"
+                >
+                  MAX
+                </button>
+              </div>
             </div>
+
+            <div className="mb-4 text-xs text-gray-400">
+              <p>• Supplying will mint {selectedMarket.symbol} and transfer to this pool</p>
+              <p>• You will earn {selectedMarket.supplyRatePerYear ? ((selectedMarket.supplyRatePerYear / 1e18) * 100).toFixed(2) : '0.00'}% APY on your supply</p>
+            </div>
+
             <div className="flex gap-3">
               <button
                 onClick={() => {
@@ -221,13 +266,15 @@ export const PoolsTable: React.FC<PoolsTableProps> = ({ markets, loading }) => {
                   setSelectedMarket(null);
                   setSupplyAmount('');
                 }}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                disabled={isSupplying}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 onClick={async () => {
                   try {
+                    setIsSupplying(true);
                     if (!selectedMarket.underlying) {
                       alert('Underlying address not found');
                       return;
@@ -245,11 +292,14 @@ export const PoolsTable: React.FC<PoolsTableProps> = ({ markets, loading }) => {
                     setSupplyAmount('');
                   } catch (error) {
                     alert(`Supply failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                  } finally {
+                    setIsSupplying(false);
                   }
                 }}
-                className="flex-1 px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded-lg transition-colors"
+                disabled={isSupplying || !supplyAmount || parseFloat(supplyAmount) <= 0}
+                className="flex-1 px-4 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Supply
+                {isSupplying ? 'Supplying...' : 'Supply'}
               </button>
             </div>
           </div>

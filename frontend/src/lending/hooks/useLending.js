@@ -1,0 +1,202 @@
+/**
+ * Lending Hooks
+ * React hooks for lending data fetching and wallet connection
+ */
+import { useState, useCallback, useEffect } from 'react';
+import API from '../services/api';
+import Web3Service from '../services/web3';
+/**
+ * Hook for fetching lending markets
+ */
+export const useMarkets = () => {
+    const [markets, setMarkets] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const fetchMarkets = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const data = await API.getMarkets();
+            setMarkets(data);
+        }
+        catch (err) {
+            setError(err instanceof Error ? err.message : '获取市场数据失败');
+        }
+        finally {
+            setLoading(false);
+        }
+    }, []);
+    useEffect(() => {
+        fetchMarkets();
+        // Refresh every 30 seconds
+        const interval = setInterval(fetchMarkets, 30000);
+        return () => clearInterval(interval);
+    }, [fetchMarkets]);
+    return { markets, loading, error, refetch: fetchMarkets };
+};
+/**
+ * Hook for fetching account data
+ */
+export const useAccount = (address) => {
+    const [account, setAccount] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const fetchAccount = useCallback(async () => {
+        if (!address) {
+            setAccount(null);
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+            const data = await API.getAccount(address);
+            setAccount(data);
+        }
+        catch (err) {
+            setError(err instanceof Error ? err.message : '获取账户数据失败');
+        }
+        finally {
+            setLoading(false);
+        }
+    }, [address]);
+    useEffect(() => {
+        if (address) {
+            fetchAccount();
+            // Refresh every 15 seconds when connected
+            const interval = setInterval(fetchAccount, 15000);
+            return () => clearInterval(interval);
+        }
+        return undefined;
+    }, [address, fetchAccount]);
+    return { account, loading, error, refetch: fetchAccount };
+};
+/**
+ * Hook for wallet connection
+ */
+export const useWallet = () => {
+    const [account, setAccount] = useState(null);
+    const [isConnected, setIsConnected] = useState(false);
+    const [chainId, setChainId] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const connect = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const address = await Web3Service.connect();
+            setAccount(address);
+            setIsConnected(true);
+            // Get chain ID
+            if (window.ethereum) {
+                const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+                setChainId(parseInt(chainIdHex, 16));
+            }
+        }
+        catch (err) {
+            setError(err instanceof Error ? err.message : '连接钱包失败');
+        }
+        finally {
+            setLoading(false);
+        }
+    }, []);
+    const disconnect = useCallback(async () => {
+        await Web3Service.disconnect();
+        setAccount(null);
+        setIsConnected(false);
+        setChainId(null);
+    }, []);
+    // Listen for account changes
+    useEffect(() => {
+        if (!window.ethereum)
+            return undefined;
+        const handleAccountsChanged = (accounts) => {
+            if (accounts.length === 0) {
+                disconnect();
+            }
+            else if (accounts[0] !== account) {
+                setAccount(accounts[0]);
+            }
+        };
+        const handleChainChanged = (chainIdHex) => {
+            setChainId(parseInt(chainIdHex, 16));
+            window.location.reload();
+        };
+        window.ethereum?.on?.('accountsChanged', handleAccountsChanged);
+        window.ethereum?.on?.('chainChanged', handleChainChanged);
+        return () => {
+            window.ethereum?.removeListener?.('accountsChanged', handleAccountsChanged);
+            window.ethereum?.removeListener?.('chainChanged', handleChainChanged);
+        };
+    }, [account, disconnect]);
+    return {
+        account,
+        isConnected,
+        chainId,
+        loading,
+        error,
+        connect,
+        disconnect,
+    };
+};
+/**
+ * Hook for transaction events
+ */
+export const useTransactions = (account, limit = 50) => {
+    const [transactions, setTransactions] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const fetchTransactions = useCallback(async () => {
+        if (!account) {
+            setTransactions([]);
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+            const events = await API.getEvents(undefined, undefined, account, undefined, undefined, limit);
+            setTransactions(events);
+        }
+        catch (err) {
+            setError(err instanceof Error ? err.message : '获取交易记录失败');
+        }
+        finally {
+            setLoading(false);
+        }
+    }, [account, limit]);
+    useEffect(() => {
+        if (account) {
+            fetchTransactions();
+            // Refresh every 30 seconds
+            const interval = setInterval(fetchTransactions, 30000);
+            return () => clearInterval(interval);
+        }
+        return undefined;
+    }, [account, fetchTransactions]);
+    return { transactions, loading, error, refetch: fetchTransactions };
+};
+export const useHealth = () => {
+    const [health, setHealth] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const fetchHealth = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const data = await API.getHealth();
+            setHealth(data);
+        }
+        catch (err) {
+            setError(err instanceof Error ? err.message : '获取系统状态失败');
+        }
+        finally {
+            setLoading(false);
+        }
+    }, []);
+    useEffect(() => {
+        fetchHealth();
+        // Refresh every 30 seconds
+        const interval = setInterval(fetchHealth, 30000);
+        return () => clearInterval(interval);
+    }, [fetchHealth]);
+    return { health, loading, error, refetch: fetchHealth };
+};

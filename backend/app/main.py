@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -10,22 +9,22 @@ from web3 import Web3
 logger = logging.getLogger("uvicorn.error")
 
 from .chain import ChainReader
-from .config import DB_PATH, RPC_URL
+from .config import DB_PATH, RPC_URL, load_addresses
 from .db import Database
 from .indexer import Indexer
 
 tags_metadata = [
     {"name": "Health", "description": "Service health and chain status"},
+    {"name": "Contracts", "description": "Live deployed contract addresses for frontend runtime config"},
     {"name": "Markets", "description": "Lending market data, summaries, and time series"},
     {"name": "Accounts", "description": "User account positions, overviews, and wallet balances"},
-    {"name": "Events", "description": "Indexed blockchain events and aggregations"},
     {"name": "Liquidity Mining", "description": "Liquidity mining pools and user positions"},
 ]
 
 app = FastAPI(
     title="Upgradable DeFi API",
     description="Backend API for the Upgradable DeFi lending protocol. "
-    "Provides real-time market data, account positions, indexed blockchain events, "
+    "Provides real-time market data, account positions, "
     "and liquidity mining information.",
     version="1.0.0",
     openapi_tags=tags_metadata,
@@ -67,23 +66,19 @@ def health():
     }
 
 
-@app.get("/events", tags=["Events"], summary="Query indexed events")
-def get_events(
-    contract: Optional[str] = Query(None, description="Filter by contract address"),
-    event: Optional[str] = Query(None, description="Filter by event name (e.g. Mint, Borrow)"),
-    fromBlock: Optional[int] = Query(None, description="Start block number"),
-    toBlock: Optional[int] = Query(None, description="End block number"),
-    limit: int = Query(100, ge=1, le=1000, description="Max results to return"),
+@app.get("/contracts/addresses", tags=["Contracts"], summary="Get live deployed protocol addresses")
+def get_contract_addresses(
+    refresh: bool = Query(False, description="Reload addresses from latest deployment artifacts before returning"),
 ):
-    """Query indexed blockchain events with optional filters for contract, event type, and block range."""
-    results = db.query_events(
-        contract=contract,
-        event=event,
-        from_block=fromBlock,
-        to_block=toBlock,
-        limit=limit,
-    )
-    return {"items": results}
+    """Return frontend-ready contract addresses currently used by the backend, including market and mining mappings."""
+    chain = getattr(app.state, "chain", None)
+    if refresh:
+        load_addresses.cache_clear()
+        app.state.chain = ChainReader()
+        chain = app.state.chain
+    if not chain:
+        raise HTTPException(status_code=500, detail="Chain reader not initialized")
+    return chain.get_contract_addresses()
 
 
 @app.get("/markets", tags=["Markets"], summary="List all markets")
@@ -149,24 +144,6 @@ def get_markets_summary():
     return summary
 
 
-
-@app.get("/stats", tags=["Events"], summary="Get event statistics")
-def get_stats(
-    contract: Optional[str] = Query(None, description="Filter by contract address"),
-    event: Optional[str] = Query(None, description="Filter by event name"),
-    fromBlock: Optional[int] = Query(None, description="Start block number"),
-    toBlock: Optional[int] = Query(None, description="End block number"),
-):
-    """Return event counts grouped by contract and event type."""
-    results = db.event_stats(
-        contract=contract,
-        event=event,
-        from_block=fromBlock,
-        to_block=toBlock,
-    )
-    return {"items": results}
-
-
 @app.get("/liquidity-mining", tags=["Liquidity Mining"], summary="List liquidity mining pools")
 def get_liquidity_mining():
     """Return information for all liquidity mining pools including reward rates and staked totals."""
@@ -187,92 +164,3 @@ def get_liquidity_mining_account(address: str):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid address")
     return result
-
-
-@app.get("/events/amounts", tags=["Events"], summary="Get event amount aggregations")
-def get_event_amounts(
-    contract: Optional[str] = Query(None, description="Filter by contract address"),
-    event: Optional[str] = Query(None, description="Filter by event name"),
-    account: Optional[str] = Query(None, description="Filter by account address involved in the event"),
-    fromBlock: Optional[int] = Query(None, description="Start block number"),
-    toBlock: Optional[int] = Query(None, description="End block number"),
-    limit: int = Query(5000, ge=1, le=50000, description="Max events to scan"),
-):
-    """Aggregate event amounts (sum and count) grouped by event type, optionally filtered by account."""
-    rows = db.query_event_rows(
-        contract=contract,
-        event=event,
-        from_block=fromBlock,
-        to_block=toBlock,
-        limit=limit,
-    )
-
-    account_lower = account.lower() if account else None
-    summary = {}
-
-    amount_keys = {
-        "Mint": ["mintAmount", "mintTokens"],
-        "Redeem": ["redeemAmount", "redeemTokens"],
-        "Borrow": ["borrowAmount"],
-        "RepayBorrow": ["repayAmount", "actualRepayAmount"],
-        "LiquidateBorrow": ["repayAmount", "seizeTokens"],
-        "Transfer": ["amount", "value"],
-    }
-    account_keys = {
-        "Mint": ["minter"],
-        "Redeem": ["redeemer"],
-        "Borrow": ["borrower"],
-        "RepayBorrow": ["payer", "borrower"],
-        "LiquidateBorrow": ["liquidator", "borrower"],
-        "Transfer": ["from", "to"],
-    }
-
-    def _to_int(value):
-        if value is None:
-            return None
-        if isinstance(value, int):
-            return value
-        if isinstance(value, str):
-            if value.startswith("0x"):
-                try:
-                    return int(value, 16)
-                except ValueError:
-                    return None
-            try:
-                return int(value)
-            except ValueError:
-                return None
-        return None
-
-    def _match_account(args_dict, evt: str):
-        if not account_lower:
-            return True
-        keys = account_keys.get(evt, [])
-        for key in keys:
-            if key in args_dict:
-                val = args_dict[key]
-                if isinstance(val, str) and val.lower() == account_lower:
-                    return True
-        return False
-
-    for row in rows:
-        evt = row["event_name"]
-        args = json.loads(row["args_json"]) if row["args_json"] else {}
-        if account_lower and not _match_account(args, evt):
-            continue
-
-        keys = amount_keys.get(evt, [])
-        amount = None
-        for key in keys:
-            if key in args:
-                amount = _to_int(args.get(key))
-                if amount is not None:
-                    break
-
-        if evt not in summary:
-            summary[evt] = {"count": 0, "amountSum": 0}
-        summary[evt]["count"] += 1
-        if amount is not None:
-            summary[evt]["amountSum"] += amount
-
-    return {"items": summary, "limit": limit}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useWallet } from '@/hooks/useWallet';
+import { useWallet } from '@/mining/hooks/useWallet';
 
 interface HeaderProps {
   activeTab: 'pools' | 'portfolio' | 'transactions' | 'analytics';

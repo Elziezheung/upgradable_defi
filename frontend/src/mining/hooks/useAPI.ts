@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import API from '@/services/api';
-import type { Market, Account, HealthStatus } from '@/services/api';
+import API from '@/mining/services/api';
+import type { Market, Account, HealthStatus } from '@/mining/services/api';
 
 export const useMarkets = () => {
   const [markets, setMarkets] = useState<Market[]>([]);
