@@ -51,17 +51,18 @@ npm install
 Create a `.env` file in the frontend directory:
 
 ```env
-VITE_API_URL=http://localhost:8000
-REACT_APP_API_URL=http://localhost:8000
+VITE_API_URL=/api
 ```
+
+For local development, `VITE_API_URL=/api` is recommended so Vite proxy forwards requests to the backend without CORS issues.
 
 ### Development
 
 ```bash
-npm start
+npm run dev
 ```
 
-The application will start at `http://localhost:3000`
+The application will start at `http://localhost:5173`
 
 ### Build
 

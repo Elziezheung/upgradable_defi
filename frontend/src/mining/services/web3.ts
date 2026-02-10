@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import API from './api';
 
 // Contract ABIs
 const LENDING_TOKEN_ABI = [
@@ -42,19 +43,6 @@ const LIQUIDITY_MINING_ABI = [
   'function balanceOf(address account) view returns (uint256)',
   'function earned(address account) view returns (uint256)',
 ];
-
-// Contract addresses (should match backend config)
-const CONTRACTS = {
-  comptroller: '0x5f3f1dbd7b74c6b46e8c44f98792a1daf8d69154',
-  markets: [
-    '0xCD8a1C3ba11CF5ECfa6267617243239504a98d90', // dUSDC
-    '0x2bdCC0de6bE1f7D2ee689a0342D76F52E8EFABa3', // dWETH
-  ],
-  liquidityMining: [
-    '0xdbc43ba45381e02825b14322cddd15ec4b3164e6', // USDC Mining
-    '0x4c4a2f8c81640e47606d3fd77b353e87ba015584', // WETH Mining
-  ],
-};
 
 class Web3Service {
   private provider: ethers.BrowserProvider | null = null;
@@ -184,7 +172,13 @@ class Web3Service {
       throw new Error('Wallet not connected');
     }
 
-    const comptrollerContract = new ethers.Contract(CONTRACTS.comptroller, COMPTROLLER_ABI, this.signer);
+    const contracts = await API.getContractAddresses();
+    const comptrollerAddress = contracts.comptroller;
+    if (!comptrollerAddress || !ethers.isAddress(comptrollerAddress)) {
+      throw new Error('Comptroller address is unavailable from backend API');
+    }
+
+    const comptrollerContract = new ethers.Contract(comptrollerAddress, COMPTROLLER_ABI, this.signer);
 
     const tx = await comptrollerContract.enterMarkets(markets);
     await tx.wait();

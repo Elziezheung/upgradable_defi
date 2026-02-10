@@ -17,6 +17,12 @@ class APIService {
         const response = await apiClient.get(`/accounts/${address}`);
         return response.data;
     }
+    async getContractAddresses(refresh = false) {
+        const response = await apiClient.get('/contracts/addresses', {
+            params: refresh ? { refresh: 'true' } : undefined,
+        });
+        return response.data;
+    }
     async getEvents(contract, event, fromBlock, toBlock, limit = 100) {
         const params = new URLSearchParams();
         if (contract)
