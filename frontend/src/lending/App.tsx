@@ -4,14 +4,13 @@ import { Header } from './components/Header';
 import { MarketsTable } from './components/MarketsTable';
 import { UserPositions } from './components/UserPositions';
 import { ActionModal } from './components/ActionModal';
-import { LiquidateSection } from './components/LiquidateSection';
 import { ProtocolUpgradeInfo } from '../ProtocolUpgradeInfo';
 import { useMarkets, useAccount, useWallet } from './hooks/useLending';
 import API from './services/api';
 import type { LendingMarket, LendingAction, UserPosition } from './types';
-import { getPrice } from './utils';
+import { getMarketSupplyUsd, formatTvl, getPrice, getPositionBalance } from './utils';
 
-const LENDING_TABS = ['markets', 'positions', 'liquidate'] as const;
+const LENDING_TABS = ['markets', 'positions'] as const;
 type LendingTab = (typeof LENDING_TABS)[number];
 
 function useLendingTab(): LendingTab {
@@ -43,18 +42,26 @@ function LendingApp() {
     setAction(a);
     setMaxAmount(max);
     setModalOpen(true);
+    // Ensure we have comptroller for supply so enterMarkets can run (enables borrow limit)
+    if (a === 'supply' && !comptroller) {
+      API.getContractAddresses().then((r) => setComptroller(r.comptroller ?? null)).catch(() => {});
+    }
   };
 
   const handleSupply = (market: LendingMarket) => openModal(market, 'supply', '1000000');
-  const handleBorrow = (market: LendingMarket) =>
-    openModal(market, 'borrow', String(accountData?.availableToBorrow ?? 0));
+  const handleBorrow = (market: LendingMarket) => {
+    const availableUsd = accountData?.availableToBorrow ?? 0;
+    const price = getPrice(market);
+    const maxToken = price > 0 ? availableUsd / price : 0;
+    openModal(market, 'borrow', String(maxToken));
+  };
   const handleWithdraw = (position: UserPosition) => {
     const market = markets.find((m) => m.market === position.market);
-    if (market) openModal(market, 'withdraw', String(position.supplyUnderlying ?? 0));
+    if (market) openModal(market, 'withdraw', String(getPositionBalance(position, 'supplyUnderlying')));
   };
   const handleRepay = (position: UserPosition) => {
     const market = markets.find((m) => m.market === position.market);
-    if (market) openModal(market, 'repay', String(position.borrowBalance ?? 0));
+    if (market) openModal(market, 'repay', String(getPositionBalance(position, 'borrowBalance')));
   };
 
   const refetch = async () => {
@@ -70,9 +77,29 @@ function LendingApp() {
   const handleModalSuccess = async () => {
     setRefetchError(null);
     try {
-      // Wait for RPC/backend to see the new block so position balance is available
-      await new Promise((r) => setTimeout(r, 1200));
+      // Wait for chain/RPC to reflect the new state
+      await new Promise((r) => setTimeout(r, 1500));
       await refetchMarkets();
+      if (account) await refetchAccount();
+      // After supply: if borrow limit is still 0, user hasn't entered markets — call enterMarkets so they can borrow
+      if (action === 'supply' && account) {
+        const fresh = await API.getAccount(account).catch(() => null);
+        const liquidityUsd = fresh?.liquidityUsd ?? fresh?.liquidity;
+        const hasSupply = fresh?.positions?.some((p) => getPositionBalance(p, 'supplyUnderlying') > 0);
+        if (hasSupply && (liquidityUsd == null || liquidityUsd === 0)) {
+          const comp = comptroller ?? (await API.getContractAddresses().then((r) => r.comptroller ?? null).catch(() => null));
+          if (comp && fresh?.positions) {
+            const marketsToEnter = fresh.positions.filter((p) => getPositionBalance(p, 'supplyUnderlying') > 0).map((p) => p.market);
+            if (marketsToEnter.length > 0) {
+              const Web3Service = (await import('./services/web3')).default;
+              await Web3Service.enterMarkets(comp, marketsToEnter);
+              await refetchAccount();
+            }
+          }
+        }
+      }
+      // Poll once more so balance/value/APY are up to date before showing Positions
+      await new Promise((r) => setTimeout(r, 2000));
       if (account) await refetchAccount();
       if (action === 'supply' || action === 'borrow') navigate('/lending/positions');
     } catch (e) {
@@ -80,10 +107,8 @@ function LendingApp() {
     }
   };
 
-  const totalTVL = markets.reduce(
-    (sum, m) => sum + ((m as { totalSupplyUsd?: number }).totalSupplyUsd ?? (m.totalSupply ?? 0) * getPrice(m)),
-    0
-  );
+  // TVL = sum of each market's total supply in USD (backend sends totalSupplyUsd in plain USD)
+  const totalTVL = markets.reduce((sum, m) => sum + getMarketSupplyUsd(m), 0);
   const avgSupply = markets.length ? markets.reduce((s, m) => s + (m.supplyRatePerYear ?? 0), 0) / markets.length : 0;
   const avgBorrow = markets.length ? markets.reduce((s, m) => s + (m.borrowRatePerYear ?? 0), 0) / markets.length : 0;
   const pct = (n: number) => (n < 1 ? n * 100 : n).toFixed(2);
@@ -115,7 +140,7 @@ function LendingApp() {
           <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 p-4">
             <div className="text-xs text-zinc-500">TVL</div>
             <div className="mt-0.5 text-2xl font-semibold text-white">
-              ${(totalTVL / 1e6).toFixed(2)}M
+              {formatTvl(totalTVL)}
             </div>
             <button
               type="button"
@@ -155,6 +180,7 @@ function LendingApp() {
                 account={accountData}
                 loading={accountLoading}
                 connected={isConnected}
+                markets={markets}
                 onWithdraw={handleWithdraw}
                 onRepay={handleRepay}
                 comptrollerAddress={comptroller}
@@ -163,18 +189,6 @@ function LendingApp() {
             </section>
           )}
 
-          {activeTab === 'liquidate' && (
-            <section>
-              <LiquidateSection
-                markets={markets}
-                isConnected={isConnected}
-                onSuccess={() => {
-                  refetchMarkets();
-                  refetchAccount();
-                }}
-              />
-            </section>
-          )}
         </div>
 
         <div className="mt-10">

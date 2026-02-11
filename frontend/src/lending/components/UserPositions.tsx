@@ -1,27 +1,29 @@
-import { useState, useEffect } from 'react';
-import type { AccountData, UserPosition } from '../types';
-import { formatPct, getPrice, formatUsd, shortAddress } from '../utils';
+import { useState, useEffect, useRef } from 'react';
+import type { AccountData, UserPosition, LendingMarket } from '../types';
+import { formatPct, getPrice, formatUsd, shortAddress, getPositionBalance } from '../utils';
 import Web3Service from '../services/web3';
 
 type Props = {
   account: AccountData | null;
   loading: boolean;
   connected: boolean;
+  markets?: LendingMarket[];
   onWithdraw: (p: UserPosition) => void;
   onRepay: (p: UserPosition) => void;
   comptrollerAddress?: string | null;
-  onRefetch?: () => void;
+  onRefetch?: () => void | Promise<void>;
 };
 
 function useSummary(positions: UserPosition[], liquidityUsd: number | undefined) {
-  const totalSupplied = positions.reduce((s, p) => s + (p.supplyUnderlying ?? 0) * getPrice(p), 0);
-  const totalBorrowed = positions.reduce((s, p) => s + (p.borrowBalance ?? 0) * getPrice(p), 0);
+  const totalSupplied = positions.reduce((s, p) => s + getPositionBalance(p, 'supplyUnderlying') * getPrice(p), 0);
+  const totalBorrowed = positions.reduce((s, p) => s + getPositionBalance(p, 'borrowBalance') * getPrice(p), 0);
   const borrowLimitFromCf = positions.reduce(
-    (s, p) => s + (p.supplyUnderlying ?? 0) * getPrice(p) * (p.collateralFactor ?? 0),
+    (s, p) => s + getPositionBalance(p, 'supplyUnderlying') * getPrice(p) * (p.collateralFactor ?? 0),
     0
   );
+  // When liquidity is 0 (not entered markets), show theoretical limit from collateral so user sees e.g. $500
   const borrowLimit =
-    typeof liquidityUsd === 'number' && totalBorrowed >= 0
+    typeof liquidityUsd === 'number' && liquidityUsd > 0
       ? totalBorrowed + liquidityUsd
       : borrowLimitFromCf;
   return { totalSupplied, totalBorrowed, borrowLimit };
@@ -30,6 +32,7 @@ function useSummary(positions: UserPosition[], liquidityUsd: number | undefined)
 function PositionTable({
   title,
   positions,
+  markets,
   type,
   onAction,
   actionLabel,
@@ -39,6 +42,7 @@ function PositionTable({
 }: {
   title: string;
   positions: UserPosition[];
+  markets?: LendingMarket[] | null;
   type: 'supply' | 'borrow';
   onAction: (p: UserPosition) => void;
   actionLabel: string;
@@ -46,6 +50,13 @@ function PositionTable({
   valueKey: 'supplyUnderlying' | 'borrowBalance';
   apyKey: 'supplyRatePerYear' | 'borrowRatePerYear';
 }) {
+  const getApy = (p: UserPosition) => {
+    const onPos = (p as Record<string, number>)[apyKey] ?? (p as Record<string, number>).supplyRatePerYear ?? (p as Record<string, number>).borrowRatePerYear ?? (p as Record<string, number>).supplyAPY ?? (p as Record<string, number>).borrowAPY;
+    if (onPos != null && Number.isFinite(onPos)) return onPos;
+    const m = markets?.find((x) => x.market?.toLowerCase() === p.market?.toLowerCase());
+    return m ? (m as Record<string, number>)[apyKey] : undefined;
+  };
+
   return (
     <section>
       <h3 className="text-lg font-semibold text-zinc-200 mb-3">{title}</h3>
@@ -65,14 +76,15 @@ function PositionTable({
           </thead>
           <tbody className="divide-y divide-zinc-700/60">
             {positions.map((p) => {
+              const balance = valueKey === 'supplyUnderlying' ? (p.supplyUnderlying ?? 0) : (p.borrowBalance ?? 0);
               const price = getPrice(p);
-              const value = (p[valueKey] ?? 0) * price;
-              const apy = (p as Record<string, number>)[apyKey] ?? (p as Record<string, number>).supplyRatePerYear ?? (p as Record<string, number>).borrowRatePerYear;
+              const value = balance * price;
+              const apy = getApy(p);
               return (
                 <tr key={p.market} className="hover:bg-zinc-800/50">
                   <td className="px-4 py-3 font-medium text-white">{p.symbol}</td>
                   <td className="px-4 py-3 text-right text-zinc-200">
-                    {(p[valueKey] ?? 0).toFixed(4)}
+                    {balance.toFixed(4)}
                   </td>
                   <td className="px-4 py-3 text-right text-zinc-200">{formatUsd(value)}</td>
                   <td className={`px-4 py-3 text-right ${type === 'supply' ? 'text-emerald-400' : 'text-amber-400'}`}>
@@ -106,23 +118,31 @@ export function UserPositions({
   account,
   loading,
   connected,
+  markets = [],
   onWithdraw,
   onRepay,
   comptrollerAddress,
   onRefetch,
 }: Props) {
   const [entering, setEntering] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync balance when user lands on positions tab (e.g. after supply on markets page)
+  // Refetch when user lands on positions tab, and poll once more after delay so balance/value/APY are fresh
   useEffect(() => {
-    if (connected && onRefetch) {
+    if (!connected || !onRefetch) return;
+    onRefetch();
+    pollRef.current = setTimeout(() => {
       onRefetch();
-    }
+      pollRef.current = null;
+    }, 2500);
+    return () => {
+      if (pollRef.current) clearTimeout(pollRef.current);
+    };
   }, [connected, onRefetch]);
 
   const handleEnterMarkets = async () => {
     if (!comptrollerAddress || !account || !onRefetch) return;
-    const markets = account.positions.filter((p) => (p.supplyUnderlying ?? 0) > 0).map((p) => p.market);
+    const markets = account.positions.filter((p) => getPositionBalance(p, 'supplyUnderlying') > 0).map((p) => p.market);
     if (markets.length === 0) return;
     setEntering(true);
     try {
@@ -158,15 +178,12 @@ export function UserPositions({
     );
   }
 
-  const supplyPositions = account.positions.filter((p) => (p.supplyUnderlying ?? 0) > 0);
-  const borrowPositions = account.positions.filter((p) => (p.borrowBalance ?? 0) > 0);
+  const supplyPositions = account.positions.filter((p) => getPositionBalance(p, 'supplyUnderlying') > 0);
+  const borrowPositions = account.positions.filter((p) => getPositionBalance(p, 'borrowBalance') > 0);
   const liquidityUsd = (account as { liquidityUsd?: number }).liquidityUsd ?? account.liquidity;
   const summary = useSummary(account.positions, liquidityUsd);
-  const showEnterMarkets =
-    supplyPositions.length > 0 &&
-    comptrollerAddress &&
-    onRefetch &&
-    (liquidityUsd == null || liquidityUsd === 0);
+  // Always show when user has supply; enterMarkets is idempotent (no-op if already entered)
+  const showEnterMarkets = supplyPositions.length > 0 && comptrollerAddress && onRefetch;
 
   return (
     <div className="space-y-6">
@@ -215,6 +232,7 @@ export function UserPositions({
         <PositionTable
           title="Supply Positions"
           positions={supplyPositions}
+          markets={markets}
           type="supply"
           valueKey="supplyUnderlying"
           apyKey="supplyRatePerYear"
@@ -228,6 +246,7 @@ export function UserPositions({
         <PositionTable
           title="Borrow Positions"
           positions={borrowPositions}
+          markets={markets}
           type="borrow"
           valueKey="borrowBalance"
           apyKey="borrowRatePerYear"

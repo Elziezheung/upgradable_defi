@@ -11,7 +11,6 @@ type Props = {
 const TABS: { path: string; label: string }[] = [
   { path: '/lending/markets', label: 'Markets' },
   { path: '/lending/positions', label: 'Positions' },
-  { path: '/lending/liquidate', label: 'Liquidate' },
 ];
 
 export function Header({ account, isConnected, onConnect, onDisconnect }: Props) {

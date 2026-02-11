@@ -45,7 +45,7 @@ function AppSwitcher() {
     <div style={appSwitcherBase}>
       <div style={{ display: 'flex', gap: '8px' }}>
         {btn('/lending/markets', isLending, '💰 Lending', '#2563eb')}
-        {btn('/mining', isMining, '⛏️ Mining', '#9333ea')}
+        {btn('/mining/pools', isMining, '⛏️ Mining', '#9333ea')}
       </div>
     </div>
   );
@@ -59,7 +59,8 @@ function App() {
         <Route path="/" element={<Navigate to="/lending/markets" replace />} />
         <Route path="/lending" element={<Navigate to="/lending/markets" replace />} />
         <Route path="/lending/*" element={<LendingApp />} />
-        <Route path="/mining" element={<MiningApp />} />
+        <Route path="/mining" element={<Navigate to="/mining/pools" replace />} />
+        <Route path="/mining/*" element={<MiningApp />} />
       </Routes>
     </div>
   );

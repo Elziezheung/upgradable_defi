@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Header } from './components/Header';
 import { PoolsTable } from './components/PoolsTable';
 import { StakeRewards } from './components/StakeRewards';
@@ -10,12 +10,21 @@ import { StatCard } from './components/StatCard';
 import { useMarkets, useAccount, useHealth } from '../mining/hooks/useAPI';
 import { useWallet } from '../mining/hooks/useWallet';
 
+const MINING_TABS = ['pools', 'portfolio', 'stake', 'transactions', 'analytics'] as const;
+type MiningTab = (typeof MINING_TABS)[number];
+
+function useMiningTab(): MiningTab {
+  const { pathname } = useLocation();
+  const segment = pathname.replace(/^\/mining\/?/, '').split('/')[0] || 'pools';
+  return MINING_TABS.includes(segment as MiningTab) ? (segment as MiningTab) : 'pools';
+}
+
 /**
  * Mining App Component
  * Liquidity mining interface for DeFi protocol
  */
 function MiningApp() {
-  const [activeTab, setActiveTab] = useState<'pools' | 'portfolio' | 'stake' | 'transactions' | 'analytics'>('pools');
+  const activeTab = useMiningTab();
   const { markets, loading: marketsLoading } = useMarkets();
   const { wallet } = useWallet();
   const { account, loading: accountLoading } = useAccount(wallet.account || null);
@@ -39,7 +48,7 @@ function MiningApp() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white">
-      <Header activeTab={activeTab} setActiveTab={setActiveTab as any} />
+      <Header />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:seo-8 py-8">
         {/* Overview Stats - Hidden on Analytics tab */}

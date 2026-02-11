@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { LendingMarket } from '../types';
-import { formatPct, getPrice } from '../utils';
+import { formatPct, getPrice, getMarketSupplyUsd } from '../utils';
 
 type Props = {
   markets: LendingMarket[];
@@ -25,10 +25,8 @@ export function MarketsTable({ markets, loading, onSupply, onBorrow }: Props) {
 
   const sorted = useMemo(() => {
     return [...markets].sort((a, b) => {
-      const priceA = getPrice(a);
-      const priceB = getPrice(b);
-      const supplyA = (a as { totalSupplyUsd?: number }).totalSupplyUsd ?? (a.totalSupply ?? 0) * priceA;
-      const supplyB = (b as { totalSupplyUsd?: number }).totalSupplyUsd ?? (b.totalSupply ?? 0) * priceB;
+      const supplyA = getMarketSupplyUsd(a);
+      const supplyB = getMarketSupplyUsd(b);
       const supplyAprA = (a as { supplyAprPct?: number }).supplyAprPct ?? a.supplyRatePerYear ?? 0;
       const supplyAprB = (b as { supplyAprPct?: number }).supplyAprPct ?? b.supplyRatePerYear ?? 0;
       const borrowAprA = (a as { borrowAprPct?: number }).borrowAprPct ?? a.borrowRatePerYear ?? 0;
@@ -117,7 +115,7 @@ export function MarketsTable({ markets, loading, onSupply, onBorrow }: Props) {
               const price = getPrice(m);
               const totalSupply = m.totalSupply ?? (m as { totalSupplyUnderlying?: number }).totalSupplyUnderlying ?? 0;
               const totalBorrows = m.totalBorrows ?? (m as { totalBorrowsUnderlying?: number }).totalBorrowsUnderlying ?? 0;
-              const supplyUsd = (m as { totalSupplyUsd?: number }).totalSupplyUsd ?? totalSupply * price;
+              const supplyUsd = getMarketSupplyUsd(m);
               const borrowsUsd = (m as { totalBorrowsUsd?: number }).totalBorrowsUsd ?? totalBorrows * price;
               const supplyApr = (m as { supplyAprPct?: number }).supplyAprPct ?? m.supplyRatePerYear;
               const borrowApr = (m as { borrowAprPct?: number }).borrowAprPct ?? m.borrowRatePerYear;

@@ -1,12 +1,16 @@
 import React from 'react';
+import { NavLink } from 'react-router-dom';
 import { useWallet } from '@/mining/hooks/useWallet';
 
-interface HeaderProps {
-  activeTab: 'pools' | 'portfolio' | 'stake' | 'transactions' | 'analytics';
-  setActiveTab: (tab: 'pools' | 'portfolio' | 'stake' | 'transactions' | 'analytics') => void;
-}
+const TABS: { path: string; label: string }[] = [
+  { path: '/mining/pools', label: 'Pools' },
+  { path: '/mining/portfolio', label: 'Portfolio' },
+  { path: '/mining/stake', label: '⛏️ Stake GOV' },
+  { path: '/mining/transactions', label: 'Transactions' },
+  { path: '/mining/analytics', label: '📊 Analytics' },
+];
 
-export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
+export const Header: React.FC = () => {
   const { wallet, connect, disconnect, loading } = useWallet();
 
   const formatAddress = (address: string) => {
@@ -18,29 +22,30 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
-          <div className="flex items-center gap-3">
+          <NavLink to="/mining/pools" className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
               <span className="text-white font-bold">L</span>
             </div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
               LiquidityMining
             </h1>
-          </div>
+          </NavLink>
 
           {/* Navigation */}
           <nav className="hidden md:flex gap-1">
-            {(['pools', 'portfolio', 'stake', 'transactions', 'analytics'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === tab
-                    ? 'text-white bg-slate-700'
-                    : 'text-gray-400 hover:text-white hover:bg-slate-800'
-                }`}
+            {TABS.map(({ path, label }) => (
+              <NavLink
+                key={path}
+                to={path}
+                end={path === '/mining/pools'}
+                className={({ isActive }) =>
+                  `px-4 py-2 rounded-lg font-medium transition-colors ${
+                    isActive ? 'text-white bg-slate-700' : 'text-gray-400 hover:text-white hover:bg-slate-800'
+                  }`
+                }
               >
-                {tab === 'analytics' ? '📊 Analytics' : tab === 'stake' ? '⛏️ Stake GOV' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </button>
+                {label}
+              </NavLink>
             ))}
           </nav>
 
@@ -73,18 +78,19 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
         {/* Mobile Navigation */}
         <div className="md:hidden flex gap-1 pb-4 overflow-x-auto">
-            {(['pools', 'portfolio', 'stake', 'transactions', 'analytics'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                activeTab === tab
-                  ? 'text-white bg-slate-700'
-                  : 'text-gray-400 hover:text-white hover:bg-slate-800'
-              }`}
+          {TABS.map(({ path, label }) => (
+            <NavLink
+              key={path}
+              to={path}
+              end={path === '/mining/pools'}
+              className={({ isActive }) =>
+                `px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                  isActive ? 'text-white bg-slate-700' : 'text-gray-400 hover:text-white hover:bg-slate-800'
+                }`
+              }
             >
-              {tab === 'analytics' ? '📊' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
+              {label}
+            </NavLink>
           ))}
         </div>
       </div>

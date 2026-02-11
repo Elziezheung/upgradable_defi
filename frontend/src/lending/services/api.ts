@@ -44,7 +44,13 @@ class LendingAPIService {
     const checksummed = getAddress(address);
     const response = await apiClient.get(`/accounts/${checksummed}`);
     const data = response.data;
-    const positions = data.positions || [];
+    let positions = data.positions || [];
+    // Normalize: ensure camelCase (backend may send snake_case)
+    positions = positions.map((pos: Record<string, unknown>) => ({
+      ...pos,
+      supplyUnderlying: pos.supplyUnderlying ?? pos.supply_underlying ?? 0,
+      borrowBalance: pos.borrowBalance ?? pos.borrow_balance ?? 0,
+    })) as UserPosition[];
     // Backend sends price as USD float (e.g. 1.0) and supplyUnderlying/borrowBalance as token amounts (e.g. 300)
     const totalSupplied = positions.reduce((sum: number, pos: UserPosition) => {
       const price = pos.price ?? (pos as { priceUsd?: number }).priceUsd ?? 0;
@@ -60,13 +66,20 @@ class LendingAPIService {
       return sum + supplyValue * (pos.collateralFactor ?? 0);
     }, 0);
     const liquidityUsd = data.liquidityUsd ?? data.liquidity;
-    const borrowLimit = typeof liquidityUsd === 'number' && totalBorrowed >= 0
-      ? totalBorrowed + liquidityUsd
-      : borrowLimitFromPositions;
-    const availableToBorrow = typeof liquidityUsd === 'number' ? liquidityUsd : Math.max(0, borrowLimit - totalBorrowed);
+    // When user hasn't entered markets or chain returns 0, liquidity is 0 but we still use theoretical limit from collateral
+    const borrowLimit =
+      typeof liquidityUsd === 'number' && liquidityUsd > 0
+        ? totalBorrowed + liquidityUsd
+        : borrowLimitFromPositions;
+    // Use chain liquidity when > 0; otherwise fall back to theoretical (borrowLimit - totalBorrowed) so borrow works after supply
+    const availableToBorrow =
+      typeof liquidityUsd === 'number' && liquidityUsd > 0
+        ? liquidityUsd
+        : Math.max(0, borrowLimit - totalBorrowed);
 
     return {
       ...data,
+      positions,
       totalSupplied,
       totalBorrowed,
       borrowLimit,

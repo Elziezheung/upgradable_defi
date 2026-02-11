@@ -440,6 +440,9 @@ class ChainReader:
                 self._call_fn(market, "totalBorrows"),
                 self._call_fn(market, "totalReserves", default=0),
             )
+            # Ensure numbers for frontend (0 instead of None when conversion fails)
+            supply_underlying_val = underlying_supply if underlying_supply is not None else 0.0
+            borrow_balance_val = borrow_balance if borrow_balance is not None else 0.0
             positions.append(
                 {
                     "market": market.address,
@@ -448,8 +451,8 @@ class ChainReader:
                     "decimals": decimals,
                     "dTokenDecimals": dtoken_decimals,
                     "supplyDToken": supply_dtoken,
-                    "supplyUnderlying": underlying_supply,
-                    "borrowBalance": borrow_balance,
+                    "supplyUnderlying": supply_underlying_val,
+                    "borrowBalance": borrow_balance_val,
                     "exchangeRate": self._wad_to_float(exchange_rate, "0.000000000000000001"),
                     "price": self._to_float(price_usd, "0.000001"),
                     "priceUsd": self._to_float(price_usd, "0.000001"),

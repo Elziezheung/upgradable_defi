@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { LendingMarket, LendingAction } from '../types';
 import Web3Service from '../services/web3';
+import API from '../services/api';
 import { formatPct } from '../utils';
 
 type Props = {
@@ -55,10 +56,16 @@ export function ActionModal({
     }
     setLoading(true);
     try {
+      // Ensure we have comptroller for supply so enterMarkets runs (supply then counts as collateral for borrow)
+      let compAddress = comptrollerAddress;
+      if (action === 'supply' && !compAddress) {
+        const addrs = await API.getContractAddresses().catch(() => ({}));
+        compAddress = addrs.comptroller ?? null;
+      }
       let hash: string;
       switch (action) {
         case 'supply':
-          hash = await Web3Service.supply(market.market, amount, market.underlying ?? '', comptrollerAddress);
+          hash = await Web3Service.supply(market.market, amount, market.underlying ?? '', compAddress);
           break;
         case 'withdraw':
           hash = await Web3Service.withdraw(market.market, amount, true);
@@ -88,6 +95,8 @@ export function ActionModal({
   const ratePct = rate != null ? formatPct(rate) : '0.00';
   const cfPct = (market.collateralFactor ?? 0) * 100;
   const utilPct = ((market.utilization ?? 0) * 100).toFixed(2);
+
+  const canBorrow = action !== 'borrow' || parseFloat(maxAmount) > 0;
 
   const submitBtnClass = {
     supply: 'bg-teal-600 hover:bg-teal-500',
@@ -157,6 +166,11 @@ export function ActionModal({
                   Available: {parseFloat(maxAmount).toFixed(4)} {market.symbol}
                 </p>
               )}
+              {action === 'borrow' && parseFloat(maxAmount) <= 0 && (
+                <p className="mt-1 text-xs text-amber-400">
+                  No borrow limit. Supply assets first, then enable them as collateral on the Positions page.
+                </p>
+              )}
             </div>
 
             <div className="mb-4 rounded-lg border border-zinc-700/80 bg-zinc-800/60 p-3 space-y-2 text-sm">
@@ -175,7 +189,7 @@ export function ActionModal({
             </div>
 
             {error && (
-              <div className="mb-4 rounded-lg border border-red-500/50 bg-red-950/30 px-3 py-2 text-sm text-red-300">
+              <div className="mb-4 max-w-full overflow-hidden rounded-lg border border-red-500/50 bg-red-950/30 px-3 py-2 text-sm text-red-300 break-words break-all whitespace-pre-wrap">
                 {error}
               </div>
             )}
@@ -192,7 +206,7 @@ export function ActionModal({
               <button
                 type="submit"
                 className={`flex-1 rounded-lg py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50 ${submitBtnClass}`}
-                disabled={loading}
+                disabled={loading || !canBorrow}
               >
                 {loading ? (
                   <span className="inline-flex items-center gap-2">
